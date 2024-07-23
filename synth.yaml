@@ -1,0 +1,18 @@
+flows:
+  default:
+    nodes:
+      tests:
+        target: tests
+        triggers:
+        - code-changes
+
+targets:
+  tests:
+    commands: |
+      cargo test
+
+triggers:
+  code-changes:
+    watch:
+    - src/
+    - Cargo.toml
