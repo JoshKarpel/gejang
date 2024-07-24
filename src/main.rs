@@ -8,6 +8,7 @@ fn main() {
         lines: vec![1, 1],
     };
     chunk.disassemble("test chunk");
+    interpret(&chunk);
 }
 
 #[derive(Debug, AsRefStr, IntoStaticStr)]
@@ -17,6 +18,8 @@ enum OpCode {
 }
 
 type Value = f64;
+
+#[derive(Debug)]
 struct Chunk {
     code: Vec<OpCode>,
     constants: Vec<Value>,
@@ -50,6 +53,27 @@ impl Chunk {
                         self.constants[*index as usize]
                     );
                 }
+            }
+        }
+    }
+}
+
+enum InterpretResult {
+    Ok,
+    CompileError,
+    RuntimeError,
+}
+
+fn interpret(chunk: &Chunk) -> InterpretResult {
+    let ip = 0;
+
+    loop {
+        match chunk.code[ip] {
+            OpCode::Return => {
+                return InterpretResult::Ok;
+            }
+            OpCode::Constant { index } => {
+                println!("{:?}", chunk.constants[index as usize]);
             }
         }
     }
