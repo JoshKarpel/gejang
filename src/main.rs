@@ -32,24 +32,16 @@ impl Chunk {
 
         let ops = self.code.iter().zip(self.lines.iter()).enumerate();
 
-        let mut prev_line = 0;
-
         for (offset, (op, line)) in ops {
-            let l = if *line == prev_line {
-                "   |".to_string()
-            } else {
-                format!("{line:04}")
-            };
-            prev_line = *line;
             let o = op.as_ref().to_ascii_uppercase();
 
             match op {
                 OpCode::Return => {
-                    println!("{offset:04} {l:04} {o}");
+                    println!("{offset:04} {line:04} {o}");
                 }
                 OpCode::Constant { index } => {
                     println!(
-                        "{offset:04} {l:04} {o} {:?}",
+                        "{offset:04} {line:04} {o} {:?}",
                         self.constants[*index as usize]
                     );
                 }
@@ -65,7 +57,7 @@ enum InterpretResult {
 }
 
 fn interpret(chunk: &Chunk) -> InterpretResult {
-    let ip = 0;
+    let mut ip = 0;
 
     loop {
         match chunk.code[ip] {
@@ -74,6 +66,7 @@ fn interpret(chunk: &Chunk) -> InterpretResult {
             }
             OpCode::Constant { index } => {
                 println!("{:?}", chunk.constants[index as usize]);
+                ip += 1;
             }
         }
     }
