@@ -5,14 +5,14 @@ fn main() {
     let chunk = Chunk {
         code: vec![OpCode::Constant { index: 0 }, OpCode::Return],
         constants: vec![1.0],
-        lines: vec![1, 2],
+        lines: vec![1, 1],
     };
     chunk.disassemble("test chunk");
 }
 
 #[derive(Debug, AsRefStr, IntoStaticStr)]
 enum OpCode {
-    Constant { index: u8 },
+    Constant { index: u32 }, // the size of this int controls how many constants a block can have
     Return,
 }
 
@@ -29,8 +29,15 @@ impl Chunk {
 
         let ops = self.code.iter().zip(self.lines.iter()).enumerate();
 
+        let mut prev_line = 0;
+
         for (offset, (op, line)) in ops {
-            let l = line;
+            let l = if *line == prev_line {
+                "   |".to_string()
+            } else {
+                format!("{line:04}")
+            };
+            prev_line = *line;
             let o = op.as_ref().to_ascii_uppercase();
 
             match op {
