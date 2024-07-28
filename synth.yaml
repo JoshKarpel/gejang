@@ -1,18 +1,27 @@
 flows:
   default:
+    envs:
+      CARGO_TERM_COLOR: always
     nodes:
       tests:
         target: tests
         triggers:
-        - code-changes
+          - code-changes
+      clippy:
+        target: clippy
+        triggers:
+          - code-changes
 
 targets:
   tests:
     commands: |
       cargo test
+  clippy:
+    commands: |
+      cargo clippy
 
 triggers:
   code-changes:
     watch:
-    - src/
-    - Cargo.toml
+      - src/
+      - Cargo.toml
