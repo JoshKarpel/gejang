@@ -49,6 +49,7 @@ impl VirtualMachine {
 
             match chunk.code[ip] {
                 OpCode::Return => {
+                    println!("{}", self.stack.pop().unwrap());
                     return InterpretResult::Ok;
                 }
                 OpCode::Constant { index } => {
