@@ -1,5 +1,9 @@
+use anyhow::Result;
+
 mod bytecode;
 
-fn main() {
-    bytecode::run()
+fn main() -> Result<()> {
+    bytecode::run()?;
+
+    Ok(())
 }

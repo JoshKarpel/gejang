@@ -1,8 +1,14 @@
+use anyhow::{bail, Result};
 use strum_macros::{AsRefStr, IntoStaticStr};
 
 #[derive(Debug, AsRefStr, IntoStaticStr)]
 pub enum OpCode {
     Constant { index: u32 }, // the size of this int controls how many constants a block can have
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Negate,
     Return,
 }
 
@@ -16,6 +22,18 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    pub fn new(code: Vec<OpCode>, constants: Vec<Value>, lines: Vec<u64>) -> Result<Chunk> {
+        if code.len() != lines.len() {
+            bail!("Chunk code and lines must have same length, but they did not: len(code)={}, len(lines)={}", code.len(), lines.len())
+        }
+
+        Ok(Chunk {
+            code,
+            constants,
+            lines,
+        })
+    }
+
     pub fn disassemble(&self, name: &str) {
         println!("== {} ==", name);
 
@@ -31,6 +49,21 @@ impl Chunk {
 
         Some(match op {
             OpCode::Return => {
+                format!("{offset:04} {line:04} {o}")
+            }
+            OpCode::Add => {
+                format!("{offset:04} {line:04} {o}")
+            }
+            OpCode::Subtract => {
+                format!("{offset:04} {line:04} {o}")
+            }
+            OpCode::Multiply => {
+                format!("{offset:04} {line:04} {o}")
+            }
+            OpCode::Divide => {
+                format!("{offset:04} {line:04} {o}")
+            }
+            OpCode::Negate => {
                 format!("{offset:04} {line:04} {o}")
             }
             OpCode::Constant { index } => {
