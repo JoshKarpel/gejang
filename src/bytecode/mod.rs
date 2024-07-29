@@ -19,7 +19,7 @@ pub fn run() -> Result<()> {
         vec![1, 2, 3, 4, 4],
     )?;
     let mut vm = VirtualMachine::new();
-    vm.interpret(&chunk, true);
+    vm.interpret(&chunk, true)?;
 
     Ok(())
 }
