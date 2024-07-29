@@ -19,22 +19,26 @@ impl Chunk {
     pub fn disassemble(&self, name: &str) {
         println!("== {} ==", name);
 
-        let ops = self.code.iter().zip(self.lines.iter()).enumerate();
+        (0..self.code.len())
+            .for_each(|offset| println!("{}", self.fmt_instruction(offset).unwrap()))
+    }
 
-        for (offset, (op, line)) in ops {
-            let o = op.as_ref().to_ascii_uppercase();
+    pub fn fmt_instruction(&self, offset: usize) -> Option<String> {
+        let op = &self.code.get(offset)?;
+        let line = self.lines.get(offset)?;
 
-            match op {
-                OpCode::Return => {
-                    println!("{offset:04} {line:04} {o}");
-                }
-                OpCode::Constant { index } => {
-                    println!(
-                        "{offset:04} {line:04} {o} {:?}",
-                        self.constants[*index as usize]
-                    );
-                }
+        let o = op.as_ref().to_ascii_uppercase();
+
+        Some(match op {
+            OpCode::Return => {
+                format!("{offset:04} {line:04} {o}")
             }
-        }
+            OpCode::Constant { index } => {
+                format!(
+                    "{offset:04} {line:04} {o} {:?}",
+                    self.constants[*index as usize]
+                )
+            }
+        })
     }
 }

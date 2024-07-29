@@ -1,4 +1,6 @@
-use crate::bytecode::ops::{Chunk, OpCode};
+use crate::bytecode::ops::{Chunk, OpCode, Value};
+use colored::Colorize;
+use itertools::Itertools;
 
 pub enum InterpretResult {
     Ok,
@@ -6,17 +8,53 @@ pub enum InterpretResult {
     // RuntimeError,
 }
 
-pub fn interpret(chunk: &Chunk) -> InterpretResult {
-    let mut ip = 0;
+pub struct VirtualMachine {
+    stack: Vec<Value>, // Book uses a fixed-size stack
+}
 
-    loop {
-        match chunk.code[ip] {
-            OpCode::Return => {
-                return InterpretResult::Ok;
+impl VirtualMachine {
+    pub fn new() -> Self {
+        VirtualMachine { stack: Vec::new() }
+    }
+
+    pub fn interpret(&mut self, chunk: &Chunk, trace: bool) -> InterpretResult {
+        let mut ip = 0;
+
+        loop {
+            if trace {
+                println!(
+                    "{}",
+                    format!(
+                        "┌─ {}{}\n└──────────────────────",
+                        chunk.fmt_instruction(ip).unwrap(),
+                        {
+                            let s = self
+                                .stack
+                                .iter()
+                                .enumerate()
+                                .rev()
+                                .map(|(s, v)| format!("{s} -> {v}"))
+                                .join("\n│ ");
+
+                            if s.is_empty() {
+                                s
+                            } else {
+                                format!("\n│ {}", s)
+                            }
+                        }
+                    )
+                    .dimmed()
+                );
             }
-            OpCode::Constant { index } => {
-                println!("{:?}", chunk.constants[index as usize]);
-                ip += 1;
+
+            match chunk.code[ip] {
+                OpCode::Return => {
+                    return InterpretResult::Ok;
+                }
+                OpCode::Constant { index } => {
+                    ip += 1;
+                    self.stack.push(chunk.constants[index as usize]);
+                }
             }
         }
     }

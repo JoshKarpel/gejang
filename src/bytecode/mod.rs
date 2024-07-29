@@ -1,15 +1,20 @@
 mod interpret;
 mod ops;
 
-use interpret::interpret;
+use interpret::VirtualMachine;
 use ops::{Chunk, OpCode};
 
 pub fn run() {
     let chunk = Chunk {
-        code: vec![OpCode::Constant { index: 0 }, OpCode::Return],
-        constants: vec![1.0],
-        lines: vec![1, 1],
+        code: vec![
+            OpCode::Constant { index: 0 },
+            OpCode::Constant { index: 1 },
+            OpCode::Return,
+        ],
+        constants: vec![1.0, 2.0],
+        lines: vec![1, 2, 3],
     };
-    chunk.disassemble("test chunk");
-    interpret(&chunk);
+    // chunk.disassemble("test chunk");
+    let mut vm = VirtualMachine::new();
+    vm.interpret(&chunk, true);
 }
