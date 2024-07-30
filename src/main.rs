@@ -14,8 +14,11 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Run the tree-walking interpreter
+    #[command(alias = "tw")]
     TreeWalker(TreeWalkerArgs),
     /// Run the bytecode virtual machine interpreter
+    #[command(alias = "bc")]
+    #[command(alias = "vm")]
     Bytecode(ByteCodeArgs),
 }
 
