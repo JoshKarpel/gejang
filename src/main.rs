@@ -16,7 +16,7 @@ enum Commands {
     /// Run the tree-walking interpreter
     TreeWalker(TreeWalkerArgs),
     /// Run the bytecode virtual machine interpreter
-    Bytecode {},
+    Bytecode(ByteCodeArgs),
 }
 
 #[derive(Debug, Args)]
@@ -30,16 +30,26 @@ enum TreeWalkerCommands {
     Run { script: PathBuf },
 }
 
+#[derive(Debug, Args)]
+struct ByteCodeArgs {
+    #[command(subcommand)]
+    command: crate::ByteCodeCommands,
+}
+
+#[derive(Debug, Subcommand)]
+enum ByteCodeCommands {
+    Run { script: PathBuf },
+}
+
 fn main() -> Result<()> {
     let args = CLI::parse();
 
     match args.command {
         Commands::TreeWalker(args) => match args.command {
-            TreeWalkerCommands::Run { script } => {
-                println!("Tree-walker {}", script.display());
-                Ok(())
-            }
+            TreeWalkerCommands::Run { script } => Ok(()),
         },
-        Commands::Bytecode {} => bytecode::run(),
+        Commands::Bytecode(args) => match args.command {
+            ByteCodeCommands::Run { script } => bytecode::run(),
+        },
     }
 }
