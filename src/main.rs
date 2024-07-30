@@ -6,7 +6,7 @@ mod bytecode;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
-struct CLI {
+struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
@@ -27,29 +27,31 @@ struct TreeWalkerArgs {
 
 #[derive(Debug, Subcommand)]
 enum TreeWalkerCommands {
+    /// Execute a script.
     Run { script: PathBuf },
 }
 
 #[derive(Debug, Args)]
 struct ByteCodeArgs {
     #[command(subcommand)]
-    command: crate::ByteCodeCommands,
+    command: ByteCodeCommands,
 }
 
 #[derive(Debug, Subcommand)]
 enum ByteCodeCommands {
+    /// Execute a script.
     Run { script: PathBuf },
 }
 
 fn main() -> Result<()> {
-    let args = CLI::parse();
+    let args = Cli::parse();
 
     match args.command {
         Commands::TreeWalker(args) => match args.command {
-            TreeWalkerCommands::Run { script } => Ok(()),
+            TreeWalkerCommands::Run { script: _ } => Ok(()),
         },
         Commands::Bytecode(args) => match args.command {
-            ByteCodeCommands::Run { script } => bytecode::run(),
+            ByteCodeCommands::Run { script: _ } => bytecode::run(),
         },
     }
 }
