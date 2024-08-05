@@ -56,7 +56,7 @@ fn main() -> Result<()> {
         Commands::Bytecode(args) => match args.command {
             ByteCodeCommands::Run { script: s } => {
                 if let Some(path) = s {
-                    bytecode::run(&path)
+                    bytecode::script(&path)
                 } else {
                     bytecode::repl()
                 }

@@ -1,30 +1,37 @@
 use anyhow::Result;
+use std::io;
+use std::io::Write;
 use std::path::Path;
 
+mod compiler;
 mod interpret;
 mod ops;
+mod scanner;
 
-use interpret::VirtualMachine;
-use ops::{Chunk, OpCode};
+pub fn script(path: &Path) -> Result<()> {
+    let source = std::fs::read_to_string(path)?;
 
-pub fn run(_path: &Path) -> Result<()> {
-    let chunk = Chunk::new(
-        vec![
-            OpCode::Constant { index: 0 },
-            OpCode::Constant { index: 1 },
-            OpCode::Negate,
-            OpCode::Add,
-            OpCode::Return,
-        ],
-        vec![1.0, 2.0],
-        vec![1, 2, 3, 4, 4],
-    )?;
-    let mut vm = VirtualMachine::new();
-    vm.interpret(&chunk, true)?;
+    interpret(&source)?;
 
     Ok(())
 }
 
 pub fn repl() -> Result<()> {
-    Ok(())
+    println!("Gejang VM REPL");
+
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+
+    loop {
+        print!("🦀> ");
+        stdout.flush().unwrap();
+        let mut buffer = String::new();
+        stdin.read_line(&mut buffer)?;
+
+        interpret(&buffer)?;
+    }
+}
+
+fn interpret(source: &String) -> Result<()> {
+    compiler::compile(source)
 }
