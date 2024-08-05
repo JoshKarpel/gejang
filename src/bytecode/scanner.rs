@@ -1,4 +1,3 @@
-use crate::bytecode::scanner::TokenType::EndOfFile;
 use anyhow::{anyhow, bail, Result};
 
 #[derive(Debug)]
@@ -20,18 +19,13 @@ impl<'s> Scanner<'s> {
     }
 }
 impl<'s> Iterator for Scanner<'s> {
-    type Item = Token;
+    type Item = Result<Token>;
 
-    fn next(&mut self) -> Option<Result<Self::Item>> {
+    fn next(&mut self) -> Option<Self::Item> {
         self.start = self.current;
 
         if self.start == self.source.len() {
-            return Some(Ok(Token {
-                typ: EndOfFile,
-                start: self.start,
-                length: 0,
-                line: self.line,
-            }));
+            return None;
         }
 
         Some(Err(anyhow!(
@@ -42,7 +36,7 @@ impl<'s> Iterator for Scanner<'s> {
 }
 
 #[derive(Debug)]
-struct Token {
+pub struct Token {
     typ: TokenType,
     start: usize,
     length: usize,
@@ -87,8 +81,6 @@ enum TokenType {
     True,
     Var,
     While,
-    Error,
-    EndOfFile,
 }
 
 pub fn scan(source: &String) -> Result<()> {
@@ -97,17 +89,18 @@ pub fn scan(source: &String) -> Result<()> {
     let mut line = 0;
 
     loop {
-        let token = scanner.token()?;
-        if token.line != line {
-            print!("{:4} ", token.line);
-            line = token.line;
-        } else {
-            print!("    | ");
-        }
-        println!("{:?}", token);
-
-        if token.typ == TokenType::EndOfFile {
-            return Ok(());
+        if let Some(t) = scanner.next() {
+            if let Ok(token) = t {
+                if token.line != line {
+                    print!("{:4} ", token.line);
+                    line = token.line;
+                } else {
+                    print!("    | ");
+                }
+                println!("{:?}", token);
+            } else {
+                bail!("Error while scanning: {:?}", t);
+            }
         }
     }
 }
