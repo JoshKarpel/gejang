@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::path::Path;
 
 mod interpret;
 mod ops;
@@ -6,7 +7,7 @@ mod ops;
 use interpret::VirtualMachine;
 use ops::{Chunk, OpCode};
 
-pub fn run() -> Result<()> {
+pub fn run(_path: &Path) -> Result<()> {
     let chunk = Chunk::new(
         vec![
             OpCode::Constant { index: 0 },
@@ -21,5 +22,9 @@ pub fn run() -> Result<()> {
     let mut vm = VirtualMachine::new();
     vm.interpret(&chunk, true)?;
 
+    Ok(())
+}
+
+pub fn repl() -> Result<()> {
     Ok(())
 }

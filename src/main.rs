@@ -43,7 +43,7 @@ struct ByteCodeArgs {
 #[derive(Debug, Subcommand)]
 enum ByteCodeCommands {
     /// Execute a script.
-    Run { script: PathBuf },
+    Run { script: Option<PathBuf> },
 }
 
 fn main() -> Result<()> {
@@ -54,7 +54,13 @@ fn main() -> Result<()> {
             TreeWalkerCommands::Run { script: _ } => Ok(()),
         },
         Commands::Bytecode(args) => match args.command {
-            ByteCodeCommands::Run { script: _ } => bytecode::run(),
+            ByteCodeCommands::Run { script: s } => {
+                if let Some(path) = s {
+                    bytecode::run(&path)
+                } else {
+                    bytecode::repl()
+                }
+            }
         },
     }
 }
