@@ -1,5 +1,5 @@
 use crate::bytecode::scanner::TokenType::EndOfFile;
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 
 #[derive(Debug)]
 pub struct Scanner<'s> {
@@ -18,20 +18,26 @@ impl<'s> Scanner<'s> {
             line: 1,
         }
     }
+}
+impl<'s> Iterator for Scanner<'s> {
+    type Item = Token;
 
-    fn token(&mut self) -> Result<Token> {
+    fn next(&mut self) -> Option<Result<Self::Item>> {
         self.start = self.current;
 
         if self.start == self.source.len() {
-            return Ok(Token {
+            return Some(Ok(Token {
                 typ: EndOfFile,
                 start: self.start,
                 length: 0,
                 line: self.line,
-            });
+            }));
         }
 
-        bail!("Unexpected character")
+        Some(Err(anyhow!(
+            "Unexpected character: {}",
+            self.source.chars().nth(self.current).unwrap()
+        )))
     }
 }
 
