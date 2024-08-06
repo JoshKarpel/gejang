@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Result};
 
 #[derive(Debug)]
 pub struct Scanner<'s> {
-    source: &'s String,
+    source: Vec<char>,
     start: usize,   // The start of the current lexeme
     current: usize, // The current character under consideration
     line: usize,
@@ -11,13 +11,23 @@ pub struct Scanner<'s> {
 impl<'s> Scanner<'s> {
     fn new(source: &'s String) -> Scanner {
         Scanner {
-            source,
+            source: source.chars().collect(),
             start: 0,
             current: 0,
             line: 1,
         }
     }
+
+    fn make_token(&self, typ: TokenType) -> Token {
+        Token {
+            typ,
+            start: self.start,
+            length: self.current - self.start,
+            line: self.line,
+        }
+    }
 }
+
 impl<'s> Iterator for Scanner<'s> {
     type Item = Result<Token>;
 
@@ -28,9 +38,49 @@ impl<'s> Iterator for Scanner<'s> {
             return None;
         }
 
+        let c = self.source.get(self.current).unwrap();
+        self.current += 1;
+
+        match c {
+            '(' => {
+                return Some(Ok(self.make_token(TokenType::LeftParen)));
+            }
+            ')' => {
+                return Some(Ok(self.make_token(TokenType::RightParen)));
+            }
+            '{' => {
+                return Some(Ok(self.make_token(TokenType::LeftBrace)));
+            }
+            '}' => {
+                return Some(Ok(self.make_token(TokenType::RightBrace)));
+            }
+            ';' => {
+                return Some(Ok(self.make_token(TokenType::Semicolon)));
+            }
+            ',' => {
+                return Some(Ok(self.make_token(TokenType::Comma)));
+            }
+            '.' => {
+                return Some(Ok(self.make_token(TokenType::Dot)));
+            }
+            '-' => {
+                return Some(Ok(self.make_token(TokenType::Minus)));
+            }
+            '+' => {
+                return Some(Ok(self.make_token(TokenType::Plus)));
+            }
+            '/' => {
+                return Some(Ok(self.make_token(TokenType::Slash)));
+            }
+            '*' => {
+                return Some(Ok(self.make_token(TokenType::Star)));
+            }
+            _ => {}
+        }
+
         Some(Err(anyhow!(
             "Unexpected character: {}",
-            self.source.chars().nth(self.current).unwrap()
+            self.source.get(self.current).unwrap()
         )))
     }
 }
