@@ -28,7 +28,10 @@ pub fn repl() -> Result<()> {
         let mut buffer = String::new();
         stdin.read_line(&mut buffer)?;
 
-        let _ = interpret(&buffer);
+        match interpret(&buffer) {
+            Ok(_) => {}
+            Err(e) => eprintln!("{e}"),
+        }
     }
 }
 

@@ -123,7 +123,7 @@ impl Iterator for Scanner {
             _ => {}
         }
 
-        Some(Err(anyhow!("Unexpected character: {c}")))
+        Some(Err(anyhow!("Unexpected character: {c:?}")))
     }
 }
 
@@ -191,9 +191,9 @@ pub fn scan(source: &String) -> Result<()> {
                 } else {
                     print!("   | ");
                 }
-                println!("{:?}", token);
-            } else {
-                bail!("Error while scanning: {:?}", t);
+                println!("{token:?}");
+            } else if let Err(t) = t {
+                bail!("Error while scanning: {t}");
             }
         }
     }
