@@ -27,8 +27,8 @@ impl Scanner {
         }
     }
 
-    fn is_at_end(&mut self) -> bool {
-        self.start == self.source.len()
+    fn is_at_end(&self) -> bool {
+        self.current == self.source.len() - 1
     }
 
     fn advance(&mut self) -> char {
@@ -44,6 +44,46 @@ impl Scanner {
             true
         }
     }
+
+    fn peek(&self) -> char {
+        self.source[self.current]
+    }
+
+    fn peek_next(&self) -> Option<char> {
+        if self.is_at_end() {
+            None
+        } else {
+            Some(self.source[self.current + 1])
+        }
+    }
+
+    fn skip_whitespace(&mut self) {
+        loop {
+            if self.is_at_end() {
+                return;
+            }
+
+            match self.peek() {
+                ' ' | '\r' | '\t' => {
+                    self.advance();
+                }
+                '\n' => {
+                    self.line += 1;
+                    self.current += 1;
+                }
+                '/' => {
+                    if let Some('/') = self.peek_next() {
+                        while self.peek() != '\n' && !self.is_at_end() {
+                            self.current += 1;
+                        }
+                    } else {
+                        return;
+                    }
+                }
+                _ => return,
+            }
+        }
+    }
 }
 
 impl Iterator for Scanner {
@@ -55,6 +95,8 @@ impl Iterator for Scanner {
         if self.is_at_end() {
             return None;
         }
+
+        self.skip_whitespace();
 
         let c = self.advance();
 
@@ -195,6 +237,8 @@ pub fn scan(source: &String) -> Result<()> {
             } else if let Err(t) = t {
                 bail!("Error while scanning: {t}");
             }
+        } else {
+            return Ok(());
         }
     }
 }
