@@ -35,6 +35,6 @@ pub fn repl() -> Result<()> {
     }
 }
 
-fn interpret(source: &String) -> Result<()> {
+fn interpret(source: &str) -> Result<()> {
     compiler::compile(source)
 }
