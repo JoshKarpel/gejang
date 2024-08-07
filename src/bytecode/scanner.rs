@@ -117,6 +117,18 @@ impl Scanner {
 
         self.make_token(TokenType::Number)
     }
+
+    fn identifier(&mut self) -> Token {
+        while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
+            // TODO: don't love that conditional
+            self.advance();
+        }
+        self.make_token(self.identifier_type())
+    }
+
+    fn identifier_type(&self) -> TokenType {
+        TokenType::Identifier
+    }
 }
 
 impl Iterator for Scanner {
@@ -197,6 +209,7 @@ impl Iterator for Scanner {
             }
             '"' => return Some(self.string()),
             '0'..='9' => return Some(Ok(self.digit())),
+            'a'..='z' | 'A'..='Z' | '_' => return Some(Ok(self.identifier())),
             _ => {}
         }
 
