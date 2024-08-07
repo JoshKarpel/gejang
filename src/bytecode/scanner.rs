@@ -101,6 +101,22 @@ impl Scanner {
 
         Ok(self.make_token(TokenType::String))
     }
+
+    fn digit(&mut self) -> Token {
+        while self.peek().is_ascii_digit() {
+            self.advance();
+        }
+
+        if self.peek() == '.' {
+            self.advance(); // consume the .
+
+            while self.peek().is_ascii_digit() {
+                self.advance();
+            }
+        }
+
+        self.make_token(TokenType::Number)
+    }
 }
 
 impl Iterator for Scanner {
@@ -180,6 +196,7 @@ impl Iterator for Scanner {
                 }));
             }
             '"' => return Some(self.string()),
+            '0'..='9' => return Some(Ok(self.digit())),
             _ => {}
         }
 
