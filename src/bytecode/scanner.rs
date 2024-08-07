@@ -127,7 +127,27 @@ impl Scanner {
     }
 
     fn identifier_type(&self) -> TokenType {
-        TokenType::Identifier
+        match self.source[self.start..self.current] {
+            // Book uses a small manually-implemented trie here;
+            // I am not particularly worried about scanning speed though.
+            ['a', 'n', 'd'] => TokenType::And,
+            ['c', 'l', 'a', 's', 's'] => TokenType::Class,
+            ['e', 'l', 's', 'e'] => TokenType::Else,
+            ['f', 'a', 'l', 's', 'e'] => TokenType::False,
+            ['f', 'o', 'r'] => TokenType::For,
+            ['f', 'u', 'n'] => TokenType::Fun,
+            ['i', 'f'] => TokenType::If,
+            ['n', 'i', 'l'] => TokenType::Nil,
+            ['o', 'r'] => TokenType::Or,
+            ['p', 'r', 'i', 'n', 't'] => TokenType::Print,
+            ['r', 'e', 't', 'u', 'r', 'n'] => TokenType::Return,
+            ['s', 'u', 'p', 'e', 'r'] => TokenType::Super,
+            ['t', 'h', 'i', 's'] => TokenType::This,
+            ['t', 'r', 'u', 'e'] => TokenType::True,
+            ['v', 'a', 'r'] => TokenType::Var,
+            ['w', 'h', 'i', 'l', 'e'] => TokenType::While,
+            _ => TokenType::Identifier,
+        }
     }
 }
 
@@ -267,7 +287,7 @@ enum TokenType {
     While,
 }
 
-pub fn scan(source: &String) -> Result<()> {
+pub fn scan(source: &str) -> Result<()> {
     let mut scanner = Scanner::new(source);
     println!("{:?}", scanner);
     let mut line = 0;
