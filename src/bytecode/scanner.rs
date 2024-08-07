@@ -9,7 +9,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    fn new(source: &String) -> Scanner {
+    fn new(source: &str) -> Scanner {
         Scanner {
             source: source.chars().collect(),
             start: 0,
@@ -83,6 +83,23 @@ impl Scanner {
                 _ => return,
             }
         }
+    }
+
+    fn string(&mut self) -> Result<Token> {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            bail!("Unterminated string");
+        }
+
+        self.advance(); // advance over the closing "
+
+        Ok(self.make_token(TokenType::String))
     }
 }
 
@@ -162,6 +179,7 @@ impl Iterator for Scanner {
                     self.make_token(TokenType::Greater)
                 }));
             }
+            '"' => return Some(self.string()),
             _ => {}
         }
 
