@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::bytecode::ops::{Chunk, OpCode, Value};
 use colored::Colorize;
@@ -18,28 +18,28 @@ impl VirtualMachine {
 
         loop {
             if trace {
+                let instruction = chunk
+                    .fmt_instruction(ip)
+                    .ok_or(anyhow!("Invalid instruction pointer: {ip}"))?;
+                let stack = {
+                    let s = self
+                        .stack
+                        .iter()
+                        .enumerate()
+                        .rev()
+                        .map(|(s, v)| format!("{s} -> {v}"))
+                        .join("\n│ ");
+
+                    // Fix the prefix for the first line
+                    if s.is_empty() {
+                        s
+                    } else {
+                        format!("\n│ {}", s)
+                    }
+                };
                 println!(
                     "{}",
-                    format!(
-                        "┌─ {}{}\n└──────────────────────",
-                        chunk.fmt_instruction(ip).unwrap(),
-                        {
-                            let s = self
-                                .stack
-                                .iter()
-                                .enumerate()
-                                .rev()
-                                .map(|(s, v)| format!("{s} -> {v}"))
-                                .join("\n│ ");
-
-                            if s.is_empty() {
-                                s
-                            } else {
-                                format!("\n│ {}", s)
-                            }
-                        }
-                    )
-                    .dimmed()
+                    format!("┌─ {}{}\n└──────────────────────", instruction, stack).dimmed()
                 );
             }
 
