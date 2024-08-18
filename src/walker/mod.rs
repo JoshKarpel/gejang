@@ -1,3 +1,5 @@
+mod ast;
+
 use std::{io, io::Write, path::Path};
 
 use anyhow::Result;
