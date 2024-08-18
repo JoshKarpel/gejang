@@ -276,19 +276,6 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn scan_hello_world() {
-        let source = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/examples/hello_world.lox"
-        ));
-
-        let tokens: Vec<_> = scan(source).collect();
-
-        assert!(tokens.iter().all(|t| t.is_ok()));
-        assert_eq!(tokens.len(), 437);
-    }
-
     #[rstest]
     #[case("1 + 2", vec![
         Ok(Token {
@@ -307,8 +294,86 @@ mod tests {
             line: 0,
         }),
     ])]
+    #[case("\"foo", vec![
+        Err(ScannerError::UnterminatedString { line: 0 }),
+    ])]
+    #[case("\"foo\"", vec![
+        Ok(Token {
+            typ: TokenType::String("foo".into()),
+            lexeme: "\"foo\"",
+            line: 0,
+        }),
+    ])]
+    #[case("\"foo\"\n\"bar\"", vec![
+        Ok(Token {
+            typ: TokenType::String("foo".into()),
+            lexeme: "\"foo\"",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::String("bar".into()),
+            lexeme: "\"bar\"",
+            line: 1,
+        }),
+    ])]
+    #[case("123", vec![
+        Ok(Token {
+            typ: TokenType::Number(123.0),
+            lexeme: "123",
+            line: 0,
+        }),
+    ])]
+    #[case("123.123", vec![
+        Ok(Token {
+            typ: TokenType::Number(123.123),
+            lexeme: "123.123",
+            line: 0,
+        }),
+    ])]
+    #[case("123.", vec![
+        Ok(Token {
+            typ: TokenType::Number(123.0),
+            lexeme: "123",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Dot,
+            lexeme: ".",
+            line: 0,
+        }),
+    ])]
+    #[case("123.foo", vec![
+        Ok(Token {
+            typ: TokenType::Number(123.0),
+            lexeme: "123",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Dot,
+            lexeme: ".",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Identifier("foo".into()),
+            lexeme: "foo",
+            line: 0,
+        }),
+    ])]
     fn test_scanner(#[case] source: &str, #[case] expected: Vec<Result<Token, ScannerError>>) {
         assert_eq!(scan(source).collect_vec(), expected);
+    }
+
+    #[test]
+    fn scan_hello_world() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/hello_world.lox"
+        ));
+
+        let tokens: Vec<_> = scan(source).collect();
+
+        assert!(tokens.iter().all(|t| t.is_ok()));
+        assert_eq!(tokens.len(), 437);
     }
 
     #[bench]
