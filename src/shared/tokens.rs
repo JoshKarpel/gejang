@@ -37,5 +37,7 @@ pub enum TokenType {
     This,
     True,
     Var,
+    Comment,
+    Whitespace,
     While,
 }

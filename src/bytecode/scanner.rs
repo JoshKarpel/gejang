@@ -195,6 +195,7 @@ impl Iterator for Scanner {
                 return Some(Ok(self.make_token(TokenType::Plus)));
             }
             '/' => {
+                // TODO: bug! doesn't handle comments correctly
                 return Some(Ok(self.make_token(TokenType::Slash)));
             }
             '*' => {
