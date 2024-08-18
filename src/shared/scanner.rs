@@ -3,7 +3,7 @@ use std::str::CharIndices;
 use thiserror::Error;
 
 #[derive(Debug, PartialEq)]
-pub enum TokenType {
+pub enum TokenType<'s> {
     LeftParen,
     RightParen,
     LeftBrace,
@@ -23,8 +23,8 @@ pub enum TokenType {
     GreaterEqual,
     Less,
     LessEqual,
-    Identifier(String),
-    String(String),
+    Identifier(&'s str),
+    String(&'s str),
     Number(f64),
     And,
     Class,
@@ -41,16 +41,16 @@ pub enum TokenType {
     This,
     True,
     Var,
-    Comment(String),
+    Comment(&'s str),
     While,
 }
 
 type LineNumber = usize;
 
 #[derive(Debug, PartialEq)]
-pub struct Token<'l> {
-    typ: TokenType,
-    lexeme: &'l str,
+pub struct Token<'s> {
+    typ: TokenType<'s>,
+    lexeme: &'s str,
     line: LineNumber,
 }
 
@@ -64,7 +64,7 @@ pub enum ScannerError {
     InvalidNumber { line: LineNumber, number: String },
 }
 
-type ScannerResult<'l> = Result<Token<'l>, ScannerError>;
+type ScannerResult<'s> = Result<Token<'s>, ScannerError>;
 
 #[derive(Debug)]
 struct Scanner<'s> {
@@ -117,7 +117,7 @@ impl<'s> Scanner<'s> {
         &self.source[self.lexeme_start..=self.current_offset]
     }
 
-    fn make_token(&self, typ: TokenType) -> Option<Result<Token<'s>, ScannerError>> {
+    fn make_token(&self, typ: TokenType<'s>) -> Option<Result<Token<'s>, ScannerError>> {
         Some(Ok(Token {
             typ,
             lexeme: self.lexeme(),
@@ -188,7 +188,7 @@ impl<'s> Iterator for Scanner<'s> {
                                 break;
                             }
                         }
-                        self.make_token(TokenType::Comment(self.lexeme().into()))
+                        self.make_token(TokenType::Comment(self.lexeme()))
                     } else {
                         self.make_token(TokenType::Slash)
                     }
@@ -250,7 +250,7 @@ impl<'s> Iterator for Scanner<'s> {
                         "true" => self.make_token(TokenType::True),
                         "var" => self.make_token(TokenType::Var),
                         "while" => self.make_token(TokenType::While),
-                        _ => self.make_token(TokenType::Identifier(self.lexeme().into())),
+                        lexeme => self.make_token(TokenType::Identifier(lexeme)),
                     }
                 }
                 _ => Some(Err(ScannerError::UnexpectedCharacter {
@@ -301,19 +301,19 @@ mod tests {
     ])]
     #[case("\"foo\"", vec![
         Ok(Token {
-            typ: TokenType::String("foo".into()),
+            typ: TokenType::String("foo"),
             lexeme: "\"foo\"",
             line: 0,
         }),
     ])]
     #[case("\"foo\"\n\"bar\"", vec![
         Ok(Token {
-            typ: TokenType::String("foo".into()),
+            typ: TokenType::String("foo"),
             lexeme: "\"foo\"",
             line: 0,
         }),
         Ok(Token {
-            typ: TokenType::String("bar".into()),
+            typ: TokenType::String("bar"),
             lexeme: "\"bar\"",
             line: 1,
         }),
@@ -356,14 +356,14 @@ mod tests {
             line: 0,
         }),
         Ok(Token {
-            typ: TokenType::Identifier("foo".into()),
+            typ: TokenType::Identifier("foo"),
             lexeme: "foo",
             line: 0,
         }),
     ])]
     #[case("printfoo", vec![
         Ok(Token {
-            typ: TokenType::Identifier("printfoo".into()),
+            typ: TokenType::Identifier("printfoo"),
             lexeme: "printfoo",
             line: 0,
         }),
@@ -375,7 +375,7 @@ mod tests {
             line: 0,
         }),
         Ok(Token {
-            typ: TokenType::Identifier("foo".into()),
+            typ: TokenType::Identifier("foo"),
             lexeme: "foo",
             line: 0,
         }),
