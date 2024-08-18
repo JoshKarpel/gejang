@@ -2,25 +2,22 @@ use std::{fmt, fmt::Display};
 
 use crate::shared::scanner::Token;
 
-type ExprRef<'s> = &'s Expr<'s>;
-type TokenRef<'s> = &'s Token<'s>;
-
 #[derive(Debug, PartialEq)]
 pub enum Expr<'s> {
     Binary {
-        left: ExprRef<'s>,
-        op: TokenRef<'s>,
-        right: ExprRef<'s>,
+        left: &'s Expr<'s>,
+        op: &'s Token<'s>,
+        right: &'s Expr<'s>,
     },
     Grouping {
-        expr: ExprRef<'s>,
+        expr: &'s Expr<'s>,
     },
     Literal {
-        token: TokenRef<'s>,
+        token: &'s Token<'s>,
     },
     Unary {
-        op: TokenRef<'s>,
-        right: ExprRef<'s>,
+        op: &'s Token<'s>,
+        right: &'s Expr<'s>,
     },
 }
 
