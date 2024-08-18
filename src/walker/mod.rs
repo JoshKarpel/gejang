@@ -1,6 +1,10 @@
+mod scanner;
+
 use std::io;
 use std::io::Write;
 use std::path::Path;
+
+use anyhow::Result;
 
 pub fn script(path: &Path) -> anyhow::Result<()> {
     let source = std::fs::read_to_string(path)?;
@@ -29,6 +33,10 @@ pub fn repl() -> anyhow::Result<()> {
     }
 }
 
-fn interpret(source: &str) -> anyhow::Result<()> {
+fn interpret(source: &str) -> Result<()> {
+    for token in scanner::scan(source) {
+        println!("{:?}", token);
+    }
+
     Ok(())
 }
