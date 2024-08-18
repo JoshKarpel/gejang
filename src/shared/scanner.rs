@@ -367,7 +367,7 @@ mod tests {
     fn scan_hello_world() {
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/examples/hello_world.lox"
+            "/examples/hello_world.🦀"
         ));
 
         let tokens: Vec<_> = scan(source).collect();
@@ -380,7 +380,7 @@ mod tests {
     fn bench_scan_hello_world(b: &mut Bencher) {
         let source = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/examples/hello_world.lox"
+            "/examples/hello_world.🦀"
         ))
         .repeat(100);
 
