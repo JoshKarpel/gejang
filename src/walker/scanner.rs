@@ -10,10 +10,10 @@ struct Scanner<'s> {
     lexeme_start: usize,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Token<'l> {
+#[derive(Debug, PartialEq)]
+pub struct Token {
     typ: TokenType,
-    lexeme: &'l str,
+    lexeme: String, // TODO: it should be possible to make this a &str pointing back to the original source
 }
 
 impl<'s> From<&'s str> for Scanner<'s> {
@@ -62,16 +62,20 @@ impl<'s> Scanner<'s> {
         self.cursor.as_str().is_empty()
     }
 
+    fn lexeme(&self) -> &str {
+        &self.source[self.lexeme_start..=self.current_offset]
+    }
+
     fn make_token(&self, typ: TokenType) -> Option<Result<Token>> {
         Some(Ok(Token {
             typ,
-            lexeme: &self.source[self.lexeme_start..self.current_offset],
+            lexeme: self.lexeme().into(),
         }))
     }
 }
 
 impl<'s> Iterator for Scanner<'s> {
-    type Item = Result<Token<'s>>;
+    type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((lexeme_start, c)) = self.advance() {
@@ -124,7 +128,7 @@ impl<'s> Iterator for Scanner<'s> {
                                 break;
                             }
                         }
-                        self.make_token(TokenType::Comment)
+                        self.make_token(TokenType::Comment(self.lexeme().into()))
                     } else {
                         self.make_token(TokenType::Slash)
                     }
@@ -133,7 +137,8 @@ impl<'s> Iterator for Scanner<'s> {
                 '"' => {
                     while let Some((_, c)) = self.advance() {
                         if c == '"' {
-                            return self.make_token(TokenType::String);
+                            // TODO: strip the quotes off
+                            return self.make_token(TokenType::String(self.lexeme().into()));
                         }
                     }
                     Some(Err(anyhow!("Unterminated string")))
@@ -155,7 +160,11 @@ impl<'s> Iterator for Scanner<'s> {
                         }
                     }
 
-                    self.make_token(TokenType::Number)
+                    if let Ok(number) = self.lexeme().parse() {
+                        self.make_token(TokenType::Number(number))
+                    } else {
+                        Some(Err(anyhow!("Invalid number: {number:?}")))
+                    }
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
                     while self
@@ -168,7 +177,7 @@ impl<'s> Iterator for Scanner<'s> {
 
                     // TODO: Add keywords, need to know the lexeme!
 
-                    self.make_token(TokenType::Identifier)
+                    self.make_token(TokenType::Identifier(self.lexeme().into()))
                 }
                 _ => Some(Err(anyhow!("Unexpected character: {c:?}"))),
             }

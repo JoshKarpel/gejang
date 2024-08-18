@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     LeftParen,
     RightParen,
@@ -19,9 +19,9 @@ pub enum TokenType {
     GreaterEqual,
     Less,
     LessEqual,
-    Identifier,
-    String,
-    Number,
+    Identifier(String),
+    String(String),
+    Number(f64),
     And,
     Class,
     Else,
@@ -37,7 +37,7 @@ pub enum TokenType {
     This,
     True,
     Var,
-    Comment,
+    Comment(String),
     Whitespace,
     While,
 }
