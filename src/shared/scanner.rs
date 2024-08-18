@@ -1,6 +1,6 @@
 use std::str::CharIndices;
 
-use anyhow::{anyhow, Result};
+use thiserror::Error;
 
 #[derive(Debug, PartialEq)]
 pub enum TokenType {
@@ -51,6 +51,18 @@ pub struct Token<'l> {
     lexeme: &'l str,
     line: usize,
 }
+
+#[derive(Error, Debug, PartialEq)]
+pub enum ScannerError {
+    #[error("Unexpected character on line {line}: {char}")]
+    UnexpectedCharacter { line: usize, char: char },
+    #[error("Unterminated string on line {line}")]
+    UnterminatedString { line: usize },
+    #[error("Invalid number on line {line}: {number}")]
+    InvalidNumber { line: usize, number: String },
+}
+
+type ScannerResult<'l> = Result<Token<'l>, ScannerError>;
 
 #[derive(Debug)]
 struct Scanner<'s> {
@@ -103,7 +115,7 @@ impl<'s> Scanner<'s> {
         &self.source[self.lexeme_start..=self.current_offset]
     }
 
-    fn make_token(&self, typ: TokenType) -> Option<Result<Token<'s>>> {
+    fn make_token(&self, typ: TokenType) -> Option<Result<Token<'s>, ScannerError>> {
         Some(Ok(Token {
             typ,
             lexeme: self.lexeme(),
@@ -113,7 +125,7 @@ impl<'s> Scanner<'s> {
 }
 
 impl<'s> Iterator for Scanner<'s> {
-    type Item = Result<Token<'s>>;
+    type Item = ScannerResult<'s>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(c) = self.peek() {
@@ -189,7 +201,7 @@ impl<'s> Iterator for Scanner<'s> {
                             ));
                         }
                     }
-                    Some(Err(anyhow!("Unterminated string")))
+                    Some(Err(ScannerError::UnterminatedString { line: self.line }))
                 }
                 '0'..='9' => {
                     while self.peek().is_some_and(|c| c.is_ascii_digit()) {
@@ -208,7 +220,10 @@ impl<'s> Iterator for Scanner<'s> {
                     if let Ok(number) = self.lexeme().parse() {
                         self.make_token(TokenType::Number(number))
                     } else {
-                        Some(Err(anyhow!("Invalid number: {:?}", self.lexeme())))
+                        Some(Err(ScannerError::InvalidNumber {
+                            line: self.line,
+                            number: self.lexeme().into(),
+                        }))
                     }
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
@@ -236,7 +251,10 @@ impl<'s> Iterator for Scanner<'s> {
                         _ => self.make_token(TokenType::Identifier(self.lexeme().into())),
                     }
                 }
-                _ => Some(Err(anyhow!("Unexpected character: {c:?}"))),
+                _ => Some(Err(ScannerError::UnexpectedCharacter {
+                    char: c,
+                    line: self.line,
+                })),
             }
         } else {
             None
@@ -244,7 +262,7 @@ impl<'s> Iterator for Scanner<'s> {
     }
 }
 
-pub fn scan(source: &str) -> impl Iterator<Item = Result<Token>> + '_ {
+pub fn scan(source: &str) -> impl Iterator<Item = ScannerResult> + '_ {
     Scanner::from(source)
 }
 
@@ -252,6 +270,8 @@ pub fn scan(source: &str) -> impl Iterator<Item = Result<Token>> + '_ {
 mod tests {
     extern crate test;
 
+    use itertools::Itertools;
+    use rstest::rstest;
     use test::Bencher;
 
     use super::*;
@@ -267,6 +287,28 @@ mod tests {
 
         assert!(tokens.iter().all(|t| t.is_ok()));
         assert_eq!(tokens.len(), 437);
+    }
+
+    #[rstest]
+    #[case("1 + 2", vec![
+        Ok(Token {
+            typ: TokenType::Number(1.0),
+            lexeme: "1",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Plus,
+            lexeme: "+",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Number(2.0),
+            lexeme: "2",
+            line: 0,
+        }),
+    ])]
+    fn test_scanner(#[case] source: &str, #[case] expected: Vec<Result<Token, ScannerError>>) {
+        assert_eq!(scan(source).collect_vec(), expected);
     }
 
     #[bench]
