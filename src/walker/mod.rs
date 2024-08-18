@@ -1,9 +1,8 @@
-mod scanner;
-
 use std::io;
 use std::io::Write;
 use std::path::Path;
 
+use crate::shared::scanner;
 use anyhow::Result;
 
 pub fn script(path: &Path) -> anyhow::Result<()> {

@@ -1,6 +1,6 @@
 use crate::shared::tokens::TokenType;
 use anyhow::{anyhow, Result};
-use std::str::{CharIndices, Chars};
+use std::str::CharIndices;
 
 #[derive(Debug)]
 struct Scanner<'s> {
@@ -56,10 +56,6 @@ impl<'s> Scanner<'s> {
         } else {
             false
         }
-    }
-
-    fn is_at_end(&self) -> bool {
-        self.cursor.as_str().is_empty()
     }
 
     fn lexeme(&self) -> &str {
@@ -163,7 +159,7 @@ impl<'s> Iterator for Scanner<'s> {
                     if let Ok(number) = self.lexeme().parse() {
                         self.make_token(TokenType::Number(number))
                     } else {
-                        Some(Err(anyhow!("Invalid number: {number:?}")))
+                        Some(Err(anyhow!("Invalid number: {:?}", self.lexeme())))
                     }
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
@@ -175,9 +171,25 @@ impl<'s> Iterator for Scanner<'s> {
                         self.advance();
                     }
 
-                    // TODO: Add keywords, need to know the lexeme!
-
-                    self.make_token(TokenType::Identifier(self.lexeme().into()))
+                    match self.lexeme() {
+                        "and" => self.make_token(TokenType::And),
+                        "class" => self.make_token(TokenType::Class),
+                        "else" => self.make_token(TokenType::Else),
+                        "false" => self.make_token(TokenType::False),
+                        "for" => self.make_token(TokenType::For),
+                        "fun" => self.make_token(TokenType::Fun),
+                        "if" => self.make_token(TokenType::If),
+                        "nil" => self.make_token(TokenType::Nil),
+                        "or" => self.make_token(TokenType::Or),
+                        "print" => self.make_token(TokenType::Print),
+                        "return" => self.make_token(TokenType::Return),
+                        "super" => self.make_token(TokenType::Super),
+                        "this" => self.make_token(TokenType::This),
+                        "true" => self.make_token(TokenType::True),
+                        "var" => self.make_token(TokenType::Var),
+                        "while" => self.make_token(TokenType::While),
+                        _ => self.make_token(TokenType::Identifier(self.lexeme().into())),
+                    }
                 }
                 _ => Some(Err(anyhow!("Unexpected character: {c:?}"))),
             }

@@ -6,7 +6,6 @@ use std::path::Path;
 mod compiler;
 mod interpret;
 mod ops;
-mod scanner;
 
 pub fn script(path: &Path) -> Result<()> {
     let source = std::fs::read_to_string(path)?;
