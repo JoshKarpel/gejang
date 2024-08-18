@@ -29,6 +29,10 @@ impl<'s> Scanner<'s> {
         self.source.clone().next()
     }
 
+    fn peek_peek(&self) -> Option<char> {
+        self.source.clone().nth(1)
+    }
+
     fn match_char(&mut self, expected: char) -> bool {
         if let Some(c) = self.peek() {
             if c == expected {
@@ -117,6 +121,35 @@ impl<'s> Iterator for Scanner<'s> {
                         }
                     }
                     Some(Err(anyhow!("Unterminated string")))
+                }
+                '0'..='9' => {
+                    while self.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                        self.advance();
+                    }
+
+                    if self.peek() == Some('.')
+                        && self.peek_peek().map(|c| c.is_ascii_digit()).unwrap_or(false)
+                    {
+                        self.advance(); // consume the .
+                        while self.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                            self.advance();
+                        }
+                    }
+
+                    self.make_token(TokenType::Number)
+                }
+                'a'..='z' | 'A'..='Z' | '_' => {
+                    while self
+                        .peek()
+                        .map(|c| c.is_alphanumeric() || c == '_')
+                        .unwrap_or(false)
+                    {
+                        self.advance();
+                    }
+
+                    // TODO: Add keywords, need to know the lexeme!
+
+                    self.make_token(TokenType::Identifier)
                 }
                 _ => Some(Err(anyhow!("Unexpected character: {c:?}"))),
             }
