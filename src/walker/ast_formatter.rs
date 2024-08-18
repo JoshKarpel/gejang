@@ -23,7 +23,7 @@ mod tests {
 
     use crate::{
         shared::scanner::{Token, TokenType},
-        walker::{ast::*, printer::format_ast},
+        walker::{ast::*, ast_formatter::format_ast},
     };
 
     #[rstest]

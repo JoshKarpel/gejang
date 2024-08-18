@@ -1,5 +1,5 @@
 mod ast;
-mod printer;
+mod ast_formatter;
 
 use std::{io, io::Write, path::Path};
 
