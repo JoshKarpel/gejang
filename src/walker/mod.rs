@@ -1,5 +1,4 @@
 mod ast;
-mod ast_formatter;
 
 use std::{io, io::Write, path::Path};
 
