@@ -8,12 +8,14 @@ struct Scanner<'s> {
     cursor: CharIndices<'s>,
     current_offset: usize,
     lexeme_start: usize,
+    line: usize,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Token {
     typ: TokenType,
     lexeme: String, // TODO: it should be possible to make this a &str pointing back to the original source
+    line: usize,
 }
 
 impl<'s> From<&'s str> for Scanner<'s> {
@@ -23,6 +25,7 @@ impl<'s> From<&'s str> for Scanner<'s> {
             cursor: source.char_indices(),
             current_offset: 0,
             lexeme_start: 0,
+            line: 0,
         }
     }
 }
@@ -31,6 +34,9 @@ impl<'s> Scanner<'s> {
     fn advance(&mut self) -> Option<(usize, char)> {
         if let Some((offset, c)) = self.cursor.next() {
             self.current_offset = offset;
+            if c == '\n' {
+                self.line += 1;
+            }
             Some((offset, c))
         } else {
             None
@@ -66,6 +72,7 @@ impl<'s> Scanner<'s> {
         Some(Ok(Token {
             typ,
             lexeme: self.lexeme().into(),
+            line: self.line,
         }))
     }
 }
@@ -74,6 +81,14 @@ impl<'s> Iterator for Scanner<'s> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        while let Some(c) = self.peek() {
+            if c == ' ' || c == '\r' || c == '\t' || c == '\n' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
         if let Some((lexeme_start, c)) = self.advance() {
             self.lexeme_start = lexeme_start;
             match c {
@@ -129,12 +144,12 @@ impl<'s> Iterator for Scanner<'s> {
                         self.make_token(TokenType::Slash)
                     }
                 }
-                ' ' | '\r' | '\t' | '\n' => self.make_token(TokenType::Whitespace),
                 '"' => {
                     while let Some((_, c)) = self.advance() {
                         if c == '"' {
-                            // TODO: strip the quotes off
-                            return self.make_token(TokenType::String(self.lexeme().into()));
+                            return self.make_token(TokenType::String(
+                                self.source[self.lexeme_start + 1..self.current_offset].into(),
+                            ));
                         }
                     }
                     Some(Err(anyhow!("Unterminated string")))
@@ -154,7 +169,7 @@ impl<'s> Iterator for Scanner<'s> {
                         while self.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
                             self.advance();
                         }
-                    }
+                    } // TODO: handle the case where there is a . but not digits after it, should be an error
 
                     if let Ok(number) = self.lexeme().parse() {
                         self.make_token(TokenType::Number(number))

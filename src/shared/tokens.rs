@@ -38,6 +38,5 @@ pub enum TokenType {
     True,
     Var,
     Comment(String),
-    Whitespace,
     While,
 }
