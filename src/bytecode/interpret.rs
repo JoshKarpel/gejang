@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
-
-use crate::bytecode::ops::{Chunk, OpCode, Value};
 use colored::Colorize;
 use itertools::Itertools;
+
+use crate::bytecode::ops::{Chunk, OpCode, Value};
 
 pub struct VirtualMachine {
     stack: Vec<Value>, // Book uses a fixed-size stack

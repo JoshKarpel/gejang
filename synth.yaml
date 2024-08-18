@@ -25,3 +25,4 @@ triggers:
     watch:
       - src/
       - Cargo.toml
+      - examples/
