@@ -14,9 +14,9 @@ struct Scanner<'s> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Token {
+pub struct Token<'l> {
     typ: TokenType,
-    lexeme: String, // TODO: it should be possible to make this a &str pointing back to the original source
+    lexeme: &'l str,
     line: usize,
 }
 
@@ -58,21 +58,21 @@ impl<'s> Scanner<'s> {
         self.cursor.clone().nth(1).map(|(_, c)| c)
     }
 
-    fn lexeme(&self) -> &str {
+    fn lexeme(&self) -> &'s str {
         &self.source[self.lexeme_start..=self.current_offset]
     }
 
-    fn make_token(&self, typ: TokenType) -> Option<Result<Token>> {
+    fn make_token(&self, typ: TokenType) -> Option<Result<Token<'s>>> {
         Some(Ok(Token {
             typ,
-            lexeme: self.lexeme().into(),
+            lexeme: self.lexeme(),
             line: self.line,
         }))
     }
 }
 
 impl<'s> Iterator for Scanner<'s> {
-    type Item = Result<Token>;
+    type Item = Result<Token<'s>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(c) = self.peek() {
@@ -142,6 +142,8 @@ impl<'s> Iterator for Scanner<'s> {
                     while let Some((_, c)) = self.advance() {
                         if c == '"' {
                             return self.make_token(TokenType::String(
+                                // Adjusting the bounds manually here to strip the quotes off is safe,
+                                // because we know that the lexeme is bounded by ASCII quote characters.
                                 self.source[self.lexeme_start + 1..self.current_offset].into(),
                             ));
                         }
