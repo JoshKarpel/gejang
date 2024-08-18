@@ -1,36 +1,48 @@
 use crate::shared::tokens::TokenType;
 use anyhow::{anyhow, Result};
-use std::str::Chars;
+use std::str::{CharIndices, Chars};
 
 #[derive(Debug)]
 struct Scanner<'s> {
-    source: Chars<'s>,
+    source: &'s str,
+    cursor: CharIndices<'s>,
+    current_offset: usize,
+    lexeme_start: usize,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Token {
+pub struct Token<'l> {
     typ: TokenType,
+    lexeme: &'l str,
 }
 
 impl<'s> From<&'s str> for Scanner<'s> {
     fn from(source: &'s str) -> Self {
-        Scanner {
-            source: source.chars(),
+        Self {
+            source,
+            cursor: source.char_indices(),
+            current_offset: 0,
+            lexeme_start: 0,
         }
     }
 }
 
 impl<'s> Scanner<'s> {
-    fn advance(&mut self) -> Option<char> {
-        self.source.next()
+    fn advance(&mut self) -> Option<(usize, char)> {
+        if let Some((offset, c)) = self.cursor.next() {
+            self.current_offset = offset;
+            Some((offset, c))
+        } else {
+            None
+        }
     }
 
     fn peek(&self) -> Option<char> {
-        self.source.clone().next()
+        self.cursor.clone().next().map(|(_, c)| c)
     }
 
     fn peek_peek(&self) -> Option<char> {
-        self.source.clone().nth(1)
+        self.cursor.clone().nth(1).map(|(_, c)| c)
     }
 
     fn match_char(&mut self, expected: char) -> bool {
@@ -47,19 +59,23 @@ impl<'s> Scanner<'s> {
     }
 
     fn is_at_end(&self) -> bool {
-        self.source.as_str().is_empty()
+        self.cursor.as_str().is_empty()
     }
 
     fn make_token(&self, typ: TokenType) -> Option<Result<Token>> {
-        Some(Ok(Token { typ }))
+        Some(Ok(Token {
+            typ,
+            lexeme: &self.source[self.lexeme_start..self.current_offset],
+        }))
     }
 }
 
 impl<'s> Iterator for Scanner<'s> {
-    type Item = Result<Token>;
+    type Item = Result<Token<'s>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(c) = self.advance() {
+        if let Some((lexeme_start, c)) = self.advance() {
+            self.lexeme_start = lexeme_start;
             match c {
                 '(' => self.make_token(TokenType::LeftParen),
                 ')' => self.make_token(TokenType::RightParen),
@@ -115,7 +131,7 @@ impl<'s> Iterator for Scanner<'s> {
                 }
                 ' ' | '\r' | '\t' | '\n' => self.make_token(TokenType::Whitespace),
                 '"' => {
-                    while let Some(c) = self.advance() {
+                    while let Some((_, c)) = self.advance() {
                         if c == '"' {
                             return self.make_token(TokenType::String);
                         }
@@ -128,7 +144,10 @@ impl<'s> Iterator for Scanner<'s> {
                     }
 
                     if self.peek() == Some('.')
-                        && self.peek_peek().map(|c| c.is_ascii_digit()).unwrap_or(false)
+                        && self
+                            .peek_peek()
+                            .map(|c| c.is_ascii_digit())
+                            .unwrap_or(false)
                     {
                         self.advance(); // consume the .
                         while self.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
