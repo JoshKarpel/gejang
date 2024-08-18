@@ -2,24 +2,25 @@ use std::{fmt, fmt::Display};
 
 use crate::shared::scanner::Token;
 
-type InnerExpr<'s> = &'s Expr<'s>;
+type ExprRef<'s> = &'s Expr<'s>;
+type TokenRef<'s> = &'s Token<'s>;
 
 #[derive(Debug, PartialEq)]
 pub enum Expr<'s> {
     Binary {
-        left: InnerExpr<'s>,
-        op: Token<'s>,
-        right: InnerExpr<'s>,
+        left: ExprRef<'s>,
+        op: TokenRef<'s>,
+        right: ExprRef<'s>,
     },
     Grouping {
-        expr: InnerExpr<'s>,
+        expr: ExprRef<'s>,
     },
     Literal {
-        token: Token<'s>,
+        token: TokenRef<'s>,
     },
     Unary {
-        op: Token<'s>,
-        right: InnerExpr<'s>,
+        op: TokenRef<'s>,
+        right: ExprRef<'s>,
     },
 }
 
@@ -57,19 +58,19 @@ mod tests {
     #[case(
         Expr::Binary {
             left: &Expr::Literal {
-                token: Token {
+                token: &Token {
                     typ: TokenType::Number(1.0),
                     lexeme: "1",
                     line: 0,
                 },
             },
-            op: Token {
+            op: &Token {
                 typ: TokenType::Plus,
                 lexeme: "+",
                 line: 0,
             },
             right: &Expr::Literal {
-                token: Token {
+                token: &Token {
                     typ: TokenType::Number(2.0),
                     lexeme: "2",
                     line: 0,
@@ -81,27 +82,27 @@ mod tests {
     #[case(
         Expr::Binary {
             left: &Expr::Unary {
-                op: Token {
+                op: &Token {
                     typ: TokenType::Minus,
                     lexeme: "-",
                     line: 0,
                 },
                 right: &Expr::Literal {
-                    token: Token {
+                    token: &Token {
                         typ: TokenType::Number(1.0),
                         lexeme: "1",
                         line: 0,
                     },
                 },
             },
-            op: Token {
+            op: &Token {
                 typ: TokenType::Star,
                 lexeme: "*",
                 line: 0,
             },
             right: &Expr::Grouping {
                 expr: &Expr::Literal {
-                    token: Token {
+                    token: &Token {
                         typ: TokenType::Number(2.0),
                         lexeme: "2",
                         line: 0,
