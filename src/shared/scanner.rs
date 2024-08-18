@@ -129,7 +129,7 @@ impl<'s> Iterator for Scanner<'s> {
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(c) = self.peek() {
-            if c == ' ' || c == '\r' || c == '\t' || c == '\n' {
+            if c.is_whitespace() {
                 self.advance();
             } else {
                 break;
