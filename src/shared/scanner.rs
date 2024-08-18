@@ -2,7 +2,55 @@ use std::str::CharIndices;
 
 use anyhow::{anyhow, Result};
 
-use crate::shared::tokens::TokenType;
+#[derive(Debug, PartialEq)]
+pub enum TokenType {
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Semicolon,
+    Slash,
+    Star,
+    Bang,
+    BangEqual,
+    Equal,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+    Identifier(String),
+    String(String),
+    Number(f64),
+    And,
+    Class,
+    Else,
+    False,
+    For,
+    Fun,
+    If,
+    Nil,
+    Or,
+    Print,
+    Return,
+    Super,
+    This,
+    True,
+    Var,
+    Comment(String),
+    While,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Token<'l> {
+    typ: TokenType,
+    lexeme: &'l str,
+    line: usize,
+}
 
 #[derive(Debug)]
 struct Scanner<'s> {
@@ -10,13 +58,6 @@ struct Scanner<'s> {
     cursor: CharIndices<'s>,
     current_offset: usize,
     lexeme_start: usize,
-    line: usize,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Token<'l> {
-    typ: TokenType,
-    lexeme: &'l str,
     line: usize,
 }
 
