@@ -9,15 +9,15 @@ pub enum Expr<'s> {
         op: &'s Token<'s>,
         right: &'s Expr<'s>,
     },
+    Unary {
+        op: &'s Token<'s>,
+        right: &'s Expr<'s>,
+    },
     Grouping {
         expr: &'s Expr<'s>,
     },
     Literal {
         token: &'s Token<'s>,
-    },
-    Unary {
-        op: &'s Token<'s>,
-        right: &'s Expr<'s>,
     },
 }
 
@@ -30,13 +30,13 @@ impl Display for Expr<'_> {
                 Expr::Binary { left, op, right } => {
                     format!("({} {} {})", op.lexeme, left, right)
                 }
+                Expr::Unary { op, right } => {
+                    format!("({} {})", op.lexeme, right)
+                }
                 Expr::Grouping { expr } => {
                     format!("(grouping {})", expr)
                 }
                 Expr::Literal { token } => token.lexeme.into(),
-                Expr::Unary { op, right } => {
-                    format!("({} {})", op.lexeme, right)
-                }
             }
         )
     }
