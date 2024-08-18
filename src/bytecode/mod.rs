@@ -1,7 +1,6 @@
+use std::{io, io::Write, path::Path};
+
 use anyhow::Result;
-use std::io;
-use std::io::Write;
-use std::path::Path;
 
 mod compiler;
 mod interpret;
