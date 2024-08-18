@@ -45,21 +45,23 @@ pub enum TokenType {
     While,
 }
 
+type LineNumber = usize;
+
 #[derive(Debug, PartialEq)]
 pub struct Token<'l> {
     typ: TokenType,
     lexeme: &'l str,
-    line: usize,
+    line: LineNumber,
 }
 
 #[derive(Error, Debug, PartialEq)]
 pub enum ScannerError {
     #[error("Unexpected character on line {line}: {char}")]
-    UnexpectedCharacter { line: usize, char: char },
+    UnexpectedCharacter { line: LineNumber, char: char },
     #[error("Unterminated string on line {line}")]
-    UnterminatedString { line: usize },
+    UnterminatedString { line: LineNumber },
     #[error("Invalid number on line {line}: {number}")]
-    InvalidNumber { line: usize, number: String },
+    InvalidNumber { line: LineNumber, number: String },
 }
 
 type ScannerResult<'l> = Result<Token<'l>, ScannerError>;
@@ -70,7 +72,7 @@ struct Scanner<'s> {
     cursor: CharIndices<'s>,
     current_offset: usize,
     lexeme_start: usize,
-    line: usize,
+    line: LineNumber,
 }
 
 impl<'s> From<&'s str> for Scanner<'s> {
