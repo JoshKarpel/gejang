@@ -359,6 +359,25 @@ mod tests {
             line: 0,
         }),
     ])]
+    #[case("printfoo", vec![
+        Ok(Token {
+            typ: TokenType::Identifier("printfoo".into()),
+            lexeme: "printfoo",
+            line: 0,
+        }),
+    ])]
+    #[case("print foo", vec![
+        Ok(Token {
+            typ: TokenType::Print,
+            lexeme: "print",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Identifier("foo".into()),
+            lexeme: "foo",
+            line: 0,
+        }),
+    ])]
     fn test_scanner(#[case] source: &str, #[case] expected: Vec<Result<Token, ScannerError>>) {
         assert_eq!(scan(source).collect_vec(), expected);
     }
