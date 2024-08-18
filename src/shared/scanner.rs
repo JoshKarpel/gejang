@@ -247,3 +247,38 @@ impl<'s> Iterator for Scanner<'s> {
 pub fn scan(source: &str) -> impl Iterator<Item = Result<Token>> + '_ {
     Scanner::from(source)
 }
+
+#[cfg(test)]
+mod tests {
+    extern crate test;
+
+    use test::Bencher;
+
+    use super::*;
+
+    #[test]
+    fn scan_hello_world() {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/hello_world.lox"
+        ));
+
+        let tokens: Vec<_> = scan(source).collect();
+
+        assert!(tokens.iter().all(|t| t.is_ok()));
+        assert_eq!(tokens.len(), 437);
+    }
+
+    #[bench]
+    fn bench_scan_hello_world(b: &mut Bencher) {
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/hello_world.lox"
+        ))
+        .repeat(100);
+
+        b.iter(|| {
+            scan(&source).for_each(drop);
+        });
+    }
+}
