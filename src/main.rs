@@ -3,6 +3,7 @@ use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
 mod bytecode;
+mod walker;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -31,7 +32,7 @@ struct TreeWalkerArgs {
 #[derive(Debug, Subcommand)]
 enum TreeWalkerCommands {
     /// Execute a script.
-    Run { script: PathBuf },
+    Run { script: Option<PathBuf> },
 }
 
 #[derive(Debug, Args)]
@@ -51,7 +52,13 @@ fn main() -> Result<()> {
 
     match args.command {
         Commands::TreeWalker(args) => match args.command {
-            TreeWalkerCommands::Run { script: _ } => Ok(()),
+            TreeWalkerCommands::Run { script: s } => {
+                if let Some(path) = s {
+                    walker::script(&path)
+                } else {
+                    walker::repl()
+                }
+            }
         },
         Commands::Bytecode(args) => match args.command {
             ByteCodeCommands::Run { script: s } => {
