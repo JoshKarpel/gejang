@@ -9,14 +9,14 @@ mod bytecode;
 mod shared;
 mod walker;
 
-#[derive(Debug, Parser)]
+#[derive(Parser, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[command(version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Subcommand, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Commands {
     /// Run the tree-walking interpreter
     #[command(alias = "tw")]
@@ -27,25 +27,25 @@ enum Commands {
     Bytecode(ByteCodeArgs),
 }
 
-#[derive(Debug, Args)]
+#[derive(Args, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct TreeWalkerArgs {
     #[command(subcommand)]
     command: TreeWalkerCommands,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Subcommand, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum TreeWalkerCommands {
     /// Execute a script.
     Run { script: Option<PathBuf> },
 }
 
-#[derive(Debug, Args)]
+#[derive(Args, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct ByteCodeArgs {
     #[command(subcommand)]
     command: ByteCodeCommands,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Subcommand, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum ByteCodeCommands {
     /// Execute a script.
     Run { script: Option<PathBuf> },
