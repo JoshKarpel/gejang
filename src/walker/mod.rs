@@ -20,7 +20,7 @@ pub fn repl() -> Result<()> {
 
     loop {
         print!("🦀> ");
-        stdout.flush().unwrap();
+        stdout.flush()?;
         let mut buffer = String::new();
         stdin.read_line(&mut buffer)?;
 
