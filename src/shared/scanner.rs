@@ -117,12 +117,12 @@ impl<'s> Scanner<'s> {
         &self.source[self.lexeme_start..=self.current_offset]
     }
 
-    fn make_token(&self, typ: TokenType<'s>) -> Option<Result<Token<'s>, ScannerError>> {
-        Some(Ok(Token {
+    fn make_token(&self, typ: TokenType<'s>) -> Result<Token<'s>, ScannerError> {
+        Ok(Token {
             typ,
             lexeme: self.lexeme(),
             line: self.line,
-        }))
+        })
     }
 }
 
@@ -138,7 +138,7 @@ impl<'s> Iterator for Scanner<'s> {
             }
         }
 
-        if let Some((lexeme_start, c)) = self.advance() {
+        self.advance().map(|(lexeme_start, c)| {
             self.lexeme_start = lexeme_start;
             match c {
                 '(' => self.make_token(TokenType::LeftParen),
@@ -203,7 +203,7 @@ impl<'s> Iterator for Scanner<'s> {
                             ));
                         }
                     }
-                    Some(Err(ScannerError::UnterminatedString { line: self.line }))
+                    Err(ScannerError::UnterminatedString { line: self.line })
                 }
                 '0'..='9' => {
                     while self.peek().is_some_and(|c| c.is_ascii_digit()) {
@@ -222,10 +222,10 @@ impl<'s> Iterator for Scanner<'s> {
                     if let Ok(number) = self.lexeme().parse() {
                         self.make_token(TokenType::Number(number))
                     } else {
-                        Some(Err(ScannerError::InvalidNumber {
+                        Err(ScannerError::InvalidNumber {
                             line: self.line,
                             number: self.lexeme().into(),
-                        }))
+                        })
                     }
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
@@ -253,14 +253,12 @@ impl<'s> Iterator for Scanner<'s> {
                         lexeme => self.make_token(TokenType::Identifier(lexeme)),
                     }
                 }
-                _ => Some(Err(ScannerError::UnexpectedCharacter {
+                _ => Err(ScannerError::UnexpectedCharacter {
                     char: c,
                     line: self.line,
-                })),
+                }),
             }
-        } else {
-            None
-        }
+        })
     }
 }
 
