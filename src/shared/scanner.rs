@@ -2,7 +2,7 @@ use std::str::CharIndices;
 
 use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub enum TokenType<'s> {
     LeftParen,
     RightParen,
@@ -47,14 +47,14 @@ pub enum TokenType<'s> {
 
 type LineNumber = usize;
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub struct Token<'s> {
     typ: TokenType<'s>,
     lexeme: &'s str,
     line: LineNumber,
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
 pub enum ScannerError {
     #[error("Unexpected character on line {line}: {char}")]
     UnexpectedCharacter { line: LineNumber, char: char },
@@ -66,7 +66,7 @@ pub enum ScannerError {
 
 type ScannerResult<'s> = Result<Token<'s>, ScannerError>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Scanner<'s> {
     source: &'s str,
     cursor: CharIndices<'s>,

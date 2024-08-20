@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use crate::shared::scanner;
 
-pub fn script(path: &Path) -> anyhow::Result<()> {
+pub fn script(path: &Path) -> Result<()> {
     let source = std::fs::read_to_string(path)?;
 
     interpret(&source)?;
@@ -12,7 +12,7 @@ pub fn script(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn repl() -> anyhow::Result<()> {
+pub fn repl() -> Result<()> {
     println!("Gejang TW REPL");
 
     let stdin = io::stdin();
