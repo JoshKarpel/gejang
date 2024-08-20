@@ -34,5 +34,7 @@ pub fn repl() -> Result<()> {
 }
 
 fn interpret(source: &str) -> Result<()> {
-    compiler::compile(source)
+    let chunk = compiler::compile(source);
+    println!("{:?}", chunk);
+    Ok(())
 }

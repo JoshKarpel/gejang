@@ -45,7 +45,7 @@ pub enum TokenType<'s> {
     While,
 }
 
-type LineNumber = usize;
+pub type LineNumber = usize;
 
 #[derive(Debug, PartialEq)]
 pub struct Token<'s> {

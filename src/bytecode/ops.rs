@@ -1,9 +1,11 @@
 use anyhow::{bail, Result};
 use strum_macros::{AsRefStr, IntoStaticStr};
 
+use crate::shared::scanner::LineNumber;
+
 #[derive(Debug, AsRefStr, IntoStaticStr)]
 pub enum OpCode {
-    Constant { index: u32 }, // the size of this int controls how many constants a block can have
+    Constant { index: usize }, // the size of this int controls how many constants a block can have
     Add,
     Subtract,
     Multiply,
@@ -14,15 +16,15 @@ pub enum OpCode {
 
 pub type Value = f64;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Chunk {
     pub code: Vec<OpCode>,
     pub constants: Vec<Value>,
-    pub lines: Vec<u64>,
+    pub lines: Vec<LineNumber>,
 }
 
 impl Chunk {
-    pub fn new(code: Vec<OpCode>, constants: Vec<Value>, lines: Vec<u64>) -> Result<Chunk> {
+    pub fn new(code: Vec<OpCode>, constants: Vec<Value>, lines: Vec<LineNumber>) -> Result<Chunk> {
         if code.len() != lines.len() {
             bail!("Chunk code and lines must have same length, but they did not: len(code)={}, len(lines)={}", code.len(), lines.len())
         }
@@ -67,10 +69,7 @@ impl Chunk {
                 format!("{offset:04} {line:04} {o}")
             }
             OpCode::Constant { index } => {
-                format!(
-                    "{offset:04} {line:04} {o} {:?}",
-                    self.constants[*index as usize]
-                )
+                format!("{offset:04} {line:04} {o} {:?}", self.constants[*index])
             }
         })
     }

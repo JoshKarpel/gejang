@@ -79,7 +79,7 @@ impl VirtualMachine {
                     ip += 1;
                 }
                 OpCode::Constant { index } => {
-                    self.stack.push(chunk.constants[index as usize]);
+                    self.stack.push(chunk.constants[index]);
                     ip += 1;
                 }
             }
