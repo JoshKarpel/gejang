@@ -98,6 +98,8 @@ impl<'s> Scanner<'s> {
     }
 
     fn advance_if_match(&mut self, expected: char) -> bool {
+        // Peekable has a similar interface, but it wouldn't go through our custom advance(),
+        // so we wouldn't get to update the line number and offset.
         self.peek()
             .is_some_and(|c| c == expected)
             .then(|| self.advance())
