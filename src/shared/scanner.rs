@@ -132,12 +132,8 @@ impl<'s> Iterator for Scanner<'s> {
     type Item = ScannerResult<'s>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(c) = self.peek() {
-            if c.is_whitespace() {
-                self.advance();
-            } else {
-                break;
-            }
+        while self.peek().is_some_and(|c| c.is_whitespace()) {
+            self.advance();
         }
 
         self.advance().map(|(lexeme_start, c)| {
