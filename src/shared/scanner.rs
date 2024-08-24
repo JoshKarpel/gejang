@@ -106,6 +106,15 @@ impl<'s> Scanner<'s> {
             .is_some()
     }
 
+    fn advance_while<F>(&mut self, predicate: F)
+    where
+        F: Fn(char) -> bool,
+    {
+        while self.peek().is_some_and(&predicate) {
+            self.advance();
+        }
+    }
+
     fn peek(&self) -> Option<char> {
         // Cloning the cursor is cheap - it's just a reference to the original source and an offset.
         self.cursor.clone().next().map(|(_, c)| c)
@@ -132,9 +141,7 @@ impl<'s> Iterator for Scanner<'s> {
     type Item = ScannerResult<'s>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.peek().is_some_and(|c| c.is_whitespace()) {
-            self.advance();
-        }
+        self.advance_while(|c| c.is_whitespace());
 
         self.advance().map(|(lexeme_start, c)| {
             self.lexeme_start = lexeme_start;
@@ -179,13 +186,7 @@ impl<'s> Iterator for Scanner<'s> {
                 }
                 '/' => {
                     if self.advance_if_match('/') {
-                        while let Some(c) = self.peek() {
-                            if c != '\n' {
-                                self.advance();
-                            } else {
-                                break;
-                            }
-                        }
+                        self.advance_while(|c| c != '\n');
                         self.make_token(TokenType::Comment(self.lexeme()))
                     } else {
                         self.make_token(TokenType::Slash)
@@ -204,17 +205,13 @@ impl<'s> Iterator for Scanner<'s> {
                     Err(ScannerError::UnterminatedString { line: self.line })
                 }
                 '0'..='9' => {
-                    while self.peek().is_some_and(|c| c.is_ascii_digit()) {
-                        self.advance();
-                    }
+                    self.advance_while(|c| c.is_ascii_digit());
 
                     if self.peek().is_some_and(|c| c == '.')
                         && self.peek_peek().is_some_and(|c| c.is_ascii_digit())
                     {
                         self.advance(); // consume the .
-                        while self.peek().is_some_and(|c| c.is_ascii_digit()) {
-                            self.advance();
-                        }
+                        self.advance_while(|c| c.is_ascii_digit());
                     }
 
                     if let Ok(number) = self.lexeme().parse() {
@@ -227,9 +224,7 @@ impl<'s> Iterator for Scanner<'s> {
                     }
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
-                    while self.peek().is_some_and(|c| c.is_alphanumeric() || c == '_') {
-                        self.advance();
-                    }
+                    self.advance_while(|c| c.is_alphanumeric() || c == '_');
 
                     match self.lexeme() {
                         "and" => self.make_token(TokenType::And),
