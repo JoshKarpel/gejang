@@ -49,9 +49,9 @@ type LineNumber = usize;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub struct Token<'s> {
-    typ: TokenType<'s>,
-    lexeme: &'s str,
-    line: LineNumber,
+    pub typ: TokenType<'s>,
+    pub lexeme: &'s str,
+    pub line: LineNumber,
 }
 
 #[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
