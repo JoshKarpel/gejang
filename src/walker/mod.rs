@@ -2,9 +2,7 @@ use std::{io, io::Write, path::Path};
 
 use anyhow::Result;
 
-mod compiler;
-mod interpret;
-mod ops;
+use crate::shared::scanner;
 
 pub fn script(path: &Path) -> Result<()> {
     let source = std::fs::read_to_string(path)?;
@@ -15,14 +13,14 @@ pub fn script(path: &Path) -> Result<()> {
 }
 
 pub fn repl() -> Result<()> {
-    println!("Gejang VM REPL");
+    println!("Gejang TW REPL");
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
 
     loop {
         print!("🦀> ");
-        stdout.flush().unwrap();
+        stdout.flush()?;
         let mut buffer = String::new();
         stdin.read_line(&mut buffer)?;
 
@@ -34,5 +32,9 @@ pub fn repl() -> Result<()> {
 }
 
 fn interpret(source: &str) -> Result<()> {
-    compiler::compile(source)
+    for token in scanner::scan(source) {
+        println!("{:?}", token);
+    }
+
+    Ok(())
 }

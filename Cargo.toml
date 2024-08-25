@@ -10,3 +10,7 @@ colored = "2.1.0"
 itertools = "0.13.0"
 strum = "0.26.3"
 strum_macros = "0.26.4"
+thiserror = "1.0.63"
+
+[dev-dependencies]
+rstest = "0.22.0"
