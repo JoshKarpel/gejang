@@ -128,7 +128,7 @@ impl<'s> Scanner<'s> {
         &self.source[self.lexeme_start..=self.current_offset]
     }
 
-    fn make_token(&self, typ: TokenType<'s>) -> Result<Token<'s>, ScannerError> {
+    fn make_token(&self, typ: TokenType<'s>) -> ScannerResult<'s> {
         Ok(Token {
             typ,
             lexeme: self.lexeme(),
