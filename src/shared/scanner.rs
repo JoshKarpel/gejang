@@ -91,7 +91,6 @@ impl<'s> Scanner<'s> {
     fn advance(&mut self) -> Option<(usize, char)> {
         self.cursor.next().inspect(|(offset, c)| {
             self.current_offset = *offset + c.len_utf8();
-            println!("{}: {}", offset, c);
             if *c == '\n' {
                 self.line += 1;
             }
