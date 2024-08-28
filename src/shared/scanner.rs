@@ -90,7 +90,7 @@ impl<'s> From<&'s str> for Scanner<'s> {
 impl<'s> Scanner<'s> {
     fn advance(&mut self) -> Option<(usize, char)> {
         self.cursor.next().inspect(|(offset, c)| {
-            self.current_offset = *offset;
+            self.current_offset = *offset + c.len_utf8();
             if *c == '\n' {
                 self.line += 1;
             }
@@ -125,7 +125,7 @@ impl<'s> Scanner<'s> {
     }
 
     fn lexeme(&self) -> &'s str {
-        &self.source[self.lexeme_start..=self.current_offset]
+        &self.source[self.lexeme_start..self.current_offset]
     }
 
     fn make_token(&self, typ: TokenType<'s>) -> ScannerResult<'s> {
@@ -198,7 +198,7 @@ impl<'s> Iterator for Scanner<'s> {
                             return self.make_token(TokenType::String(
                                 // Adjusting the bounds manually here to strip the quotes off is safe,
                                 // because we know that the lexeme is bounded by ASCII quote characters.
-                                self.source[self.lexeme_start + 1..self.current_offset].into(),
+                                self.source[self.lexeme_start + 1..self.current_offset - 1].into(),
                             ));
                         }
                     }
@@ -223,7 +223,7 @@ impl<'s> Iterator for Scanner<'s> {
                         })
                     }
                 }
-                'a'..='z' | 'A'..='Z' | '_' => {
+                c if c.is_alphabetic() => {
                     self.advance_while(|c| c.is_alphanumeric() || c == '_');
 
                     match self.lexeme() {
@@ -371,6 +371,120 @@ mod tests {
             line: 0,
         }),
     ])]
+    #[case("안녕하세요", vec![
+        Ok(Token {
+            typ: TokenType::Identifier("안녕하세요"),
+            lexeme: "안녕하세요",
+            line: 0,
+        }),
+    ])]
+    #[case("λ", vec![
+        Ok(Token {
+            typ: TokenType::Identifier("λ"),
+            lexeme: "λ",
+            line: 0,
+        }),
+    ])]
+    #[case("λ + bar", vec![
+        Ok(Token {
+            typ: TokenType::Identifier("λ"),
+            lexeme: "λ",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Plus,
+            lexeme: "+",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Identifier("bar"),
+            lexeme: "bar",
+            line: 0,
+        }),
+    ])]
+    #[case("λ.bar", vec![
+        Ok(Token {
+            typ: TokenType::Identifier("λ"),
+            lexeme: "λ",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Dot,
+            lexeme: ".",
+            line: 0,
+        }),
+        Ok(Token {
+            typ: TokenType::Identifier("bar"),
+            lexeme: "bar",
+            line: 0,
+        }),
+    ])]
+    #[case("\"λ\"", vec![
+        Ok(Token {
+            typ: TokenType::String("λ"),
+            lexeme: "\"λ\"",
+            line: 0,
+        }),
+    ])]
+    // TODO: support emoji identifiers
+    // #[case("🦀", vec![
+    //     Ok(Token {
+    //         typ: TokenType::Identifier("🦀"),
+    //         lexeme: "🦀",
+    //         line: 0,
+    //     }),
+    // ])]
+    // #[case("🦀 + bar", vec![
+    //     Ok(Token {
+    //         typ: TokenType::Identifier("🦀"),
+    //         lexeme: "🦀",
+    //         line: 0,
+    //     }),
+    //     Ok(Token {
+    //         typ: TokenType::Plus,
+    //         lexeme: "+",
+    //         line: 0,
+    //     }),
+    //     Ok(Token {
+    //         typ: TokenType::Identifier("bar"),
+    //         lexeme: "bar",
+    //         line: 0,
+    //     }),
+    // ])]
+    // #[case("🦀.bar", vec![
+    //     Ok(Token {
+    //         typ: TokenType::Identifier("🦀"),
+    //         lexeme: "🦀",
+    //         line: 0,
+    //     }),
+    //     Ok(Token {
+    //         typ: TokenType::Dot,
+    //         lexeme: ".",
+    //         line: 0,
+    //     }),
+    //     Ok(Token {
+    //         typ: TokenType::Identifier("bar"),
+    //         lexeme: "bar",
+    //         line: 0,
+    //     }),
+    // ])]
+    // #[case("🦀.λ", vec![
+    //     Ok(Token {
+    //         typ: TokenType::Identifier("🦀"),
+    //         lexeme: "🦀",
+    //         line: 0,
+    //     }),
+    //     Ok(Token {
+    //         typ: TokenType::Dot,
+    //         lexeme: ".",
+    //         line: 0,
+    //     }),
+    //     Ok(Token {
+    //         typ: TokenType::Identifier("λ"),
+    //         lexeme: "λ",
+    //         line: 0,
+    //     }),
+    // ])]
     fn test_scanner(#[case] source: &str, #[case] expected: Vec<Result<Token, ScannerError>>) {
         assert_eq!(scan(source).collect_vec(), expected);
     }
