@@ -2,6 +2,8 @@ use std::{io, io::Write, path::Path};
 
 use anyhow::Result;
 
+use crate::bytecode::interpret::VirtualMachine;
+
 mod compiler;
 mod interpret;
 mod ops;
@@ -34,5 +36,9 @@ pub fn repl() -> Result<()> {
 }
 
 fn interpret(source: &str) -> Result<()> {
-    compiler::compile(source)
+    compiler::compile(source)?;
+
+    let _ = VirtualMachine::new();
+
+    Ok(())
 }
