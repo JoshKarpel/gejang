@@ -5,6 +5,7 @@ use itertools::Itertools;
 use crate::bytecode::ops::{Chunk, OpCode, Value};
 
 pub struct VirtualMachine {
+    #[allow(dead_code)]
     stack: Vec<Value>, // Book uses a fixed-size stack
 }
 
@@ -13,6 +14,7 @@ impl VirtualMachine {
         VirtualMachine { stack: Vec::new() }
     }
 
+    #[allow(dead_code)]
     pub fn interpret(&mut self, chunk: &Chunk, trace: bool) -> Result<()> {
         let mut ip = 0;
 

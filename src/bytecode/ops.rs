@@ -1,4 +1,7 @@
+use std::fmt::Display;
+
 use anyhow::{bail, Result};
+use itertools::Itertools;
 use strum_macros::{AsRefStr, IntoStaticStr};
 
 #[derive(Debug, AsRefStr, IntoStaticStr)]
@@ -22,6 +25,7 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    #[allow(dead_code)]
     pub fn new(code: Vec<OpCode>, constants: Vec<Value>, lines: Vec<u64>) -> Result<Chunk> {
         if code.len() != lines.len() {
             bail!("Chunk code and lines must have same length, but they did not: len(code)={}, len(lines)={}", code.len(), lines.len())
@@ -32,13 +36,6 @@ impl Chunk {
             constants,
             lines,
         })
-    }
-
-    pub fn disassemble(&self, name: &str) {
-        println!("== {} ==", name);
-
-        (0..self.code.len())
-            .for_each(|offset| println!("{}", self.fmt_instruction(offset).unwrap()))
     }
 
     pub fn fmt_instruction(&self, offset: usize) -> Option<String> {
@@ -73,5 +70,17 @@ impl Chunk {
                 )
             }
         })
+    }
+}
+
+impl Display for Chunk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}",
+            (0..self.code.len())
+                .map(|offset| self.fmt_instruction(offset).unwrap().to_string())
+                .join("\n")
+        )
     }
 }
