@@ -29,11 +29,11 @@ impl<'s, I> Parser<I>
 where
     I: Iterator<Item = &'s Token<'s>>,
 {
-    fn expression(&mut self) -> Expr {
+    fn expression(&mut self) -> Expr<'s> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Expr {
+    fn equality(&mut self) -> Expr<'s> {
         let mut expr = self.comparison();
 
         while let Some(operator) = self
@@ -51,7 +51,7 @@ where
         expr
     }
 
-    fn comparison(&mut self) -> Expr {
+    fn comparison(&mut self) -> Expr<'s> {
         let mut expr = self.term();
 
         while let Some(operator) = self.tokens.next_if(|t| {
@@ -74,7 +74,7 @@ where
         expr
     }
 
-    fn term(&mut self) -> Expr {
+    fn term(&mut self) -> Expr<'s> {
         let mut expr = self.factor();
 
         while let Some(operator) = self
@@ -92,7 +92,7 @@ where
         expr
     }
 
-    fn factor(&mut self) -> Expr {
+    fn factor(&mut self) -> Expr<'s> {
         let mut expr = self.unary();
 
         while let Some(operator) = self
@@ -110,7 +110,7 @@ where
         expr
     }
 
-    fn unary(&mut self) -> Expr {
+    fn unary(&mut self) -> Expr<'s> {
         if let Some(operator) = self
             .tokens
             .next_if(|t| matches!(t.typ, TokenType::Bang | TokenType::Minus))
@@ -125,7 +125,7 @@ where
         self.primary()
     }
 
-    fn primary(&mut self) -> Expr {
+    fn primary(&mut self) -> Expr<'s> {
         if let Some(token) = self.tokens.peek() {
             match token.typ {
                 TokenType::False => Expr::Literal { token },
