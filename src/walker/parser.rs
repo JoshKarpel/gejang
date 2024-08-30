@@ -25,6 +25,12 @@ having a mutable reference to the iterator itself).
 But the things we're returning are immutable borrows
 to the iterator's underlying data, not the iterator itself,
 so we can have multiple of those at the same time.
+
+Note that the explicit lifetime on the return values
+(`Expr<'s>`) is necessary because otherwise Rust will
+infer the lifetime to be the same as the
+Parser's `&mut self` lifetime instead of
+the data inside the iterator.
 */
 
 struct Parser<I>
