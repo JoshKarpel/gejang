@@ -15,7 +15,16 @@ are references to the tokens in the parser (immutable borrows).
 But as we descend recursively, we need a *mutable* borrow on Parser.current,
 but because we have to borrow the Parser struct itself mutably,
 we're screwed.
+
 How to work around this?
+
+Using a single iterator seems to be the way to go.
+We still need a mutable reference to the Parser struct
+(though now that's roughly equivalent to just
+having a mutable reference to the iterator itself).
+But the things we're returning are immutable borrows
+to the iterator's underlying data, not the iterator itself,
+so we can have multiple of those at the same time.
 */
 
 struct Parser<I>
