@@ -2,22 +2,25 @@ use std::{fmt, fmt::Display};
 
 use crate::shared::scanner::Token;
 
+type E<'s> = Box<Expr<'s>>;
+type T<'s> = &'s Token<'s>;
+
 #[derive(Debug, PartialEq)]
 pub enum Expr<'s> {
     Binary {
-        left: Box<Expr<'s>>,
-        op: &'s Token<'s>,
-        right: Box<Expr<'s>>,
+        left: E<'s>,
+        op: T<'s>,
+        right: E<'s>,
     },
     Unary {
-        op: &'s Token<'s>,
-        right: Box<Expr<'s>>,
+        op: T<'s>,
+        right: E<'s>,
     },
     Grouping {
-        expr: Box<Expr<'s>>,
+        expr: E<'s>,
     },
     Literal {
-        token: &'s Token<'s>,
+        token: T<'s>,
     },
 }
 

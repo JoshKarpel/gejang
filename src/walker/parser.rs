@@ -1,42 +1,44 @@
+use std::iter::Peekable;
+
 use crate::{
     shared::scanner::{Token, TokenType},
     walker::ast::Expr,
 };
 
-struct Parser<'s> {
-    tokens: Vec<Token<'s>>,
-    current: usize,
+/*
+Trying to write this the way the book wants doesn't work
+because of Rust's borrowing rules.
+The problem is that the Parser struct borrows itself mutably,
+which means that it can't borrow itself immutably at the same time.
+That's a problem because the data structures returned by the parser
+are references to the tokens in the parser (immutable borrows).
+But as we descend recursively, we need a *mutable* borrow on Parser.current,
+but because we have to borrow the Parser struct itself mutably,
+we're screwed.
+How to work around this?
+*/
+
+struct Parser<I>
+where
+    I: Iterator,
+{
+    tokens: Peekable<I>,
 }
 
-impl<'s> Parser<'s> {
-    fn new(tokens: Vec<Token<'s>>) -> Self {
-        Parser { tokens, current: 0 }
-    }
-
-    fn advance(&mut self) -> Option<&Token<'s>> {
-        self.current += 1;
-        self.tokens.get(self.current - 1)
-    }
-
-    fn advance_if(&mut self, test: fn(&Token<'s>) -> bool) -> Option<&Token<'s>> {
-        self.peek()
-            .is_some_and(test)
-            .then(|| self.advance().unwrap()) // unwrap is safe here because we know the peek is Some
-    }
-
-    fn peek(&self) -> Option<&Token<'s>> {
-        self.tokens.get(self.current)
-    }
-
-    fn expression(&'s mut self) -> Expr<'s> {
+impl<'s, I> Parser<I>
+where
+    I: Iterator<Item = &'s Token<'s>>,
+{
+    fn expression(&mut self) -> Expr {
         self.equality()
     }
 
-    fn equality(&'s mut self) -> Expr<'s> {
+    fn equality(&mut self) -> Expr {
         let mut expr = self.comparison();
 
-        while let Some(operator) =
-            self.advance_if(|t| matches!(t.typ, TokenType::BangEqual | TokenType::EqualEqual))
+        while let Some(operator) = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::BangEqual | TokenType::EqualEqual))
         {
             let right = self.comparison();
             expr = Expr::Binary {
@@ -49,10 +51,10 @@ impl<'s> Parser<'s> {
         expr
     }
 
-    fn comparison(&'s mut self) -> Expr<'s> {
+    fn comparison(&mut self) -> Expr {
         let mut expr = self.term();
 
-        while let Some(operator) = self.advance_if(|t| {
+        while let Some(operator) = self.tokens.next_if(|t| {
             matches!(
                 t.typ,
                 TokenType::Greater
@@ -72,11 +74,12 @@ impl<'s> Parser<'s> {
         expr
     }
 
-    fn term(&'s mut self) -> Expr<'s> {
+    fn term(&mut self) -> Expr {
         let mut expr = self.factor();
 
-        while let Some(operator) =
-            self.advance_if(|t| matches!(t.typ, TokenType::Minus | TokenType::Plus))
+        while let Some(operator) = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Minus | TokenType::Plus))
         {
             let right = self.factor();
             expr = Expr::Binary {
@@ -89,11 +92,12 @@ impl<'s> Parser<'s> {
         expr
     }
 
-    fn factor(&'s mut self) -> Expr<'s> {
+    fn factor(&mut self) -> Expr {
         let mut expr = self.unary();
 
-        while let Some(operator) =
-            self.advance_if(|t| matches!(t.typ, TokenType::Slash | TokenType::Star))
+        while let Some(operator) = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Slash | TokenType::Star))
         {
             let right = self.unary();
             expr = Expr::Binary {
@@ -106,9 +110,10 @@ impl<'s> Parser<'s> {
         expr
     }
 
-    fn unary(&'s mut self) -> Expr<'s> {
-        if let Some(operator) =
-            self.advance_if(|t| matches!(t.typ, TokenType::Bang | TokenType::Minus))
+    fn unary(&mut self) -> Expr {
+        if let Some(operator) = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Bang | TokenType::Minus))
         {
             let right = self.unary();
             return Expr::Unary {
@@ -120,8 +125,8 @@ impl<'s> Parser<'s> {
         self.primary()
     }
 
-    fn primary(&'s mut self) -> Expr<'s> {
-        if let Some(token) = self.advance() {
+    fn primary(&mut self) -> Expr {
+        if let Some(token) = self.tokens.peek() {
             match token.typ {
                 TokenType::False => Expr::Literal { token },
                 TokenType::True => Expr::Literal { token },
@@ -130,7 +135,8 @@ impl<'s> Parser<'s> {
                 TokenType::String(_) => Expr::Literal { token },
                 TokenType::LeftParen => {
                     let expr = self.expression();
-                    self.advance_if(|t| matches!(t.typ, TokenType::RightParen))
+                    self.tokens
+                        .next_if(|t| matches!(t.typ, TokenType::RightParen))
                         .expect("Expected closing paren"); // TODO: result!
                     Expr::Grouping {
                         expr: Box::new(expr),

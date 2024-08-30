@@ -106,7 +106,7 @@ impl<'s> Scanner<'s> {
             .is_some()
     }
 
-    fn advance_while<F>(&mut self, predicate: fn(char) -> bool) {
+    fn advance_while(&mut self, predicate: fn(char) -> bool) {
         while self.peek().is_some_and(predicate) {
             self.advance();
         }
