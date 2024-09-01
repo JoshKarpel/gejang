@@ -231,7 +231,7 @@ where
 
 pub fn parse<'s, I>(tokens: I) -> ParserResult<'s>
 where
-    I: IntoIterator<Item = &'s Token<'s>>,
+    I: IntoIterator<Item = &'s Token<'s>>, // TODO: Iterator or IntoIterator?
 {
     let mut parser = Parser::from(tokens.into_iter());
     parser.expression()
