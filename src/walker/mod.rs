@@ -4,6 +4,7 @@ mod parser;
 use std::{io, io::Write, path::Path};
 
 use anyhow::Result;
+use thiserror::Error;
 
 use crate::shared::scanner;
 
@@ -34,9 +35,46 @@ pub fn repl() -> Result<()> {
     }
 }
 
-fn interpret(source: &str) -> Result<()> {
-    for token in scanner::scan(source) {
-        println!("{:?}", token);
+#[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
+pub enum InterpreterError {
+    #[error("Scanner error")]
+    ScannerError,
+    #[error("Parser error")]
+    ParserError,
+}
+
+fn interpret(source: &str) -> Result<(), InterpreterError> {
+    let mut tokens = vec![];
+    let mut errors = vec![];
+    for r in scanner::scan(source) {
+        match r {
+            Ok(token) => {
+                println!("{:?}", token);
+                tokens.push(token);
+            }
+            Err(e) => {
+                errors.push(e);
+            }
+        }
+    }
+
+    if !errors.is_empty() {
+        for e in errors {
+            eprintln!("{:?}", e);
+        }
+        return Err(InterpreterError::ScannerError);
+    }
+
+    let expr = parser::parse(tokens.iter());
+
+    match expr {
+        Ok(expr) => {
+            println!("{}", expr);
+        }
+        Err(e) => {
+            eprintln!("{:?}", e);
+            return Err(InterpreterError::ParserError);
+        }
     }
 
     Ok(())

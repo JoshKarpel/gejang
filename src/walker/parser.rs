@@ -41,6 +41,8 @@ pub enum ParserError<'s> {
     UnexpectedToken { token: &'s Token<'s> },
     #[error("Unexpected end of input")]
     UnexpectedEndOfInput,
+    #[error("Expected an expression, but got {token:?}")]
+    ExpectedExpression { token: &'s Token<'s> },
 }
 
 type ParserResult<'s> = Result<Expr<'s>, ParserError<'s>>;
@@ -52,10 +54,47 @@ where
     tokens: Peekable<I>,
 }
 
+impl<'s, I> From<I> for Parser<I>
+where
+    I: Iterator<Item = &'s Token<'s>>,
+{
+    fn from(tokens: I) -> Self {
+        Parser {
+            tokens: tokens.peekable(),
+        }
+    }
+}
+
 impl<'s, I> Parser<I>
 where
     I: Iterator<Item = &'s Token<'s>>,
 {
+    fn synchronize(&mut self) {
+        while let Some(token) = self.tokens.next() {
+            // If we are at the end of the current statement...
+            if matches!(token.typ, TokenType::Semicolon) {
+                return;
+            }
+
+            // ... or at the beginning of a new statement
+            if let Some(next) = self.tokens.peek() {
+                if matches!(
+                    next.typ,
+                    TokenType::Class
+                        | TokenType::Fun
+                        | TokenType::Var
+                        | TokenType::For
+                        | TokenType::If
+                        | TokenType::While
+                        | TokenType::Print
+                        | TokenType::Return
+                ) {
+                    return;
+                }
+            }
+        }
+    }
+
     fn expression(&mut self) -> ParserResult<'s> {
         self.equality()
     }
@@ -175,10 +214,18 @@ where
                         expr: Box::new(expr),
                     }
                 }
-                _ => return Err(ParserError::UnexpectedToken { token }),
+                _ => return Err(ParserError::ExpectedExpression { token }),
             })
         } else {
             Err(ParserError::UnexpectedEndOfInput)
         }
     }
+}
+
+pub fn parse<'s, I>(tokens: I) -> ParserResult<'s>
+where
+    I: IntoIterator<Item = &'s Token<'s>>,
+{
+    let mut parser = Parser::from(tokens.into_iter());
+    parser.expression()
 }
