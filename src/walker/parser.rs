@@ -1,5 +1,7 @@
 use std::iter::Peekable;
 
+use thiserror::Error;
+
 use crate::{
     shared::scanner::{Token, TokenType},
     walker::ast::Expr,
@@ -33,6 +35,16 @@ Parser's `&mut self` lifetime instead of
 the data inside the iterator.
 */
 
+#[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
+pub enum ParserError<'s> {
+    #[error("Unexpected token: {token:?}")] // TODO: implement Display for Token
+    UnexpectedToken { token: &'s Token<'s> },
+    #[error("Unexpected end of input")]
+    UnexpectedEndOfInput,
+}
+
+type ParserResult<'s> = Result<Expr<'s>, ParserError<'s>>;
+
 struct Parser<I>
 where
     I: Iterator,
@@ -44,18 +56,18 @@ impl<'s, I> Parser<I>
 where
     I: Iterator<Item = &'s Token<'s>>,
 {
-    fn expression(&mut self) -> Expr<'s> {
+    fn expression(&mut self) -> ParserResult<'s> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Expr<'s> {
-        let mut expr = self.comparison();
+    fn equality(&mut self) -> ParserResult<'s> {
+        let mut expr = self.comparison()?;
 
         while let Some(operator) = self
             .tokens
             .next_if(|t| matches!(t.typ, TokenType::BangEqual | TokenType::EqualEqual))
         {
-            let right = self.comparison();
+            let right = self.comparison()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
                 op: operator,
@@ -63,11 +75,11 @@ where
             };
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn comparison(&mut self) -> Expr<'s> {
-        let mut expr = self.term();
+    fn comparison(&mut self) -> ParserResult<'s> {
+        let mut expr = self.term()?;
 
         while let Some(operator) = self.tokens.next_if(|t| {
             matches!(
@@ -78,7 +90,7 @@ where
                     | TokenType::LessEqual
             )
         }) {
-            let right = self.term();
+            let right = self.term()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
                 op: operator,
@@ -86,17 +98,17 @@ where
             };
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn term(&mut self) -> Expr<'s> {
-        let mut expr = self.factor();
+    fn term(&mut self) -> ParserResult<'s> {
+        let mut expr = self.factor()?;
 
         while let Some(operator) = self
             .tokens
             .next_if(|t| matches!(t.typ, TokenType::Minus | TokenType::Plus))
         {
-            let right = self.factor();
+            let right = self.factor()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
                 op: operator,
@@ -104,17 +116,17 @@ where
             };
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn factor(&mut self) -> Expr<'s> {
-        let mut expr = self.unary();
+    fn factor(&mut self) -> ParserResult<'s> {
+        let mut expr = self.unary()?;
 
         while let Some(operator) = self
             .tokens
             .next_if(|t| matches!(t.typ, TokenType::Slash | TokenType::Star))
         {
-            let right = self.unary();
+            let right = self.unary()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
                 op: operator,
@@ -122,34 +134,34 @@ where
             };
         }
 
-        expr
+        Ok(expr)
     }
 
-    fn unary(&mut self) -> Expr<'s> {
+    fn unary(&mut self) -> ParserResult<'s> {
         if let Some(operator) = self
             .tokens
             .next_if(|t| matches!(t.typ, TokenType::Bang | TokenType::Minus))
         {
-            let right = self.unary();
-            return Expr::Unary {
+            let right = self.unary()?;
+            return Ok(Expr::Unary {
                 op: operator,
                 right: Box::new(right),
-            };
+            });
         }
 
         self.primary()
     }
 
-    fn primary(&mut self) -> Expr<'s> {
+    fn primary(&mut self) -> ParserResult<'s> {
         if let Some(token) = self.tokens.peek() {
-            match token.typ {
+            Ok(match token.typ {
                 TokenType::False => Expr::Literal { token },
                 TokenType::True => Expr::Literal { token },
                 TokenType::Nil => Expr::Literal { token },
                 TokenType::Number(_) => Expr::Literal { token },
                 TokenType::String(_) => Expr::Literal { token },
                 TokenType::LeftParen => {
-                    let expr = self.expression();
+                    let expr = self.expression()?;
                     self.tokens
                         .next_if(|t| matches!(t.typ, TokenType::RightParen))
                         .expect("Expected closing paren"); // TODO: result!
@@ -157,10 +169,10 @@ where
                         expr: Box::new(expr),
                     }
                 }
-                _ => panic!("Unexpected token: {:?}", token),
-            }
+                _ => return Err(ParserError::UnexpectedToken { token }),
+            })
         } else {
-            panic!("Unexpected end of input");
+            Err(ParserError::UnexpectedEndOfInput)
         }
     }
 }
