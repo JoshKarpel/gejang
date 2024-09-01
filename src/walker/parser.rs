@@ -7,6 +7,21 @@ use crate::{
     walker::ast::Expr,
 };
 
+#[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
+pub enum ParserError<'s> {
+    #[error("Expected {expected} on line {}, but got {}", .token.line, .token.typ)]
+    UnexpectedToken {
+        expected: TokenType<'s>,
+        token: &'s Token<'s>,
+    },
+    #[error("Unexpected end of input")]
+    UnexpectedEndOfInput,
+    #[error("Expected an expression, but got {token:?}")]
+    ExpectedExpression { token: &'s Token<'s> },
+}
+
+type ParserResult<'s> = Result<Expr<'s>, ParserError<'s>>;
+
 /*
 Trying to write this the way the book wants doesn't work
 because of Rust's borrowing rules.
@@ -34,21 +49,6 @@ infer the lifetime to be the same as the
 Parser's `&mut self` lifetime instead of
 the data inside the iterator.
 */
-
-#[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
-pub enum ParserError<'s> {
-    #[error("Expected {expected} on line {}, but got: {}", .token.line, .token.typ)]
-    UnexpectedToken {
-        expected: TokenType<'s>,
-        token: &'s Token<'s>,
-    },
-    #[error("Unexpected end of input")]
-    UnexpectedEndOfInput,
-    #[error("Expected an expression, but got {token:?}")]
-    ExpectedExpression { token: &'s Token<'s> },
-}
-
-type ParserResult<'s> = Result<Expr<'s>, ParserError<'s>>;
 
 struct Parser<I>
 where
@@ -316,7 +316,7 @@ mod tests {
             lexeme: "foo",
             line: 0,
         },
-    }, "Expected ) on line 0, but got: an identifier")]
+    }, "Expected ) on line 0, but got an identifier")]
     fn test_parse_error_display(#[case] err: ParserError, #[case] expected: &str) {
         assert_eq!(err.to_string(), expected);
     }
