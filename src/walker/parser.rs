@@ -195,7 +195,7 @@ where
     }
 
     fn primary(&mut self) -> ParserResult<'s> {
-        if let Some(token) = self.tokens.peek() {
+        if let Some(token) = self.tokens.next() {
             Ok(match token.typ {
                 TokenType::False => Expr::Literal { token },
                 TokenType::True => Expr::Literal { token },
