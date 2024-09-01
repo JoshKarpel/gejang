@@ -164,7 +164,13 @@ where
                     let expr = self.expression()?;
                     self.tokens
                         .next_if(|t| matches!(t.typ, TokenType::RightParen))
-                        .expect("Expected closing paren"); // TODO: result!
+                        .ok_or_else(|| {
+                            self.tokens
+                                .peek()
+                                .map_or(ParserError::UnexpectedEndOfInput, |token| {
+                                    ParserError::UnexpectedToken { token }
+                                })
+                        })?;
                     Expr::Grouping {
                         expr: Box::new(expr),
                     }
