@@ -69,6 +69,7 @@ impl<'s, I> Parser<I>
 where
     I: Iterator<Item = &'s Token<'s>>,
 {
+    #[allow(dead_code)]
     fn synchronize(&mut self) {
         while let Some(token) = self.tokens.next() {
             // If we are at the end of the current statement...
@@ -143,6 +144,8 @@ where
     fn term(&mut self) -> ParserResult<'s> {
         let mut expr = self.factor()?;
 
+        println!("factor: {:?}", expr);
+        println!("next: {:?}", self.tokens.peek());
         while let Some(operator) = self
             .tokens
             .next_if(|t| matches!(t.typ, TokenType::Minus | TokenType::Plus))
@@ -228,4 +231,40 @@ where
 {
     let mut parser = Parser::from(tokens.into_iter());
     parser.expression()
+}
+
+#[cfg(test)]
+mod tests {
+    use itertools::Itertools;
+    use rstest::rstest;
+
+    use super::*;
+    use crate::shared::scanner::scan;
+
+    #[rstest]
+    #[case("1 + 2", Ok(Expr::Binary {
+        left: Box::new(Expr::Literal {
+            token: &Token {
+                typ: TokenType::Number(1.0),
+                lexeme: "1",
+                line: 0,
+            },
+        }),
+        op: &Token {
+            typ: TokenType::Plus,
+            lexeme: "+",
+            line: 0,
+        },
+        right: Box::new(Expr::Literal {
+            token: &Token {
+                typ: TokenType::Number(2.0),
+                lexeme: "2",
+                line: 0,
+            },
+        }),
+    }))]
+    fn test_parse(#[case] source: &str, #[case] expected: ParserResult) {
+        let tokens: Vec<Token> = scan(source).try_collect().unwrap();
+        assert_eq!(parse(tokens.iter()), expected);
+    }
 }
