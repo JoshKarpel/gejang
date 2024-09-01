@@ -68,12 +68,14 @@ mod tests {
                 typ: TokenType::Plus,
                 lexeme: "+",
                 line: 0,
+
             },
             right: Box::new(Expr::Literal {
                 token: &Token {
                     typ: TokenType::Number(2.0),
                     lexeme: "2",
                     line: 0,
+
                 },
             }),
         },
@@ -86,12 +88,14 @@ mod tests {
                     typ: TokenType::Minus,
                     lexeme: "-",
                     line: 0,
+
                 },
                 right: Box::new(Expr::Literal {
                     token: &Token {
                         typ: TokenType::Number(1.0),
                         lexeme: "1",
                         line: 0,
+
                     },
                 }),
             }),
@@ -99,6 +103,7 @@ mod tests {
                 typ: TokenType::Star,
                 lexeme: "*",
                 line: 0,
+
             },
             right: Box::new(Expr::Grouping {
                 expr: Box::new(Expr::Literal {
@@ -106,6 +111,7 @@ mod tests {
                         typ: TokenType::Number(2.0),
                         lexeme: "2",
                         line: 0,
+
                     },
                 }),
             }),

@@ -37,8 +37,11 @@ the data inside the iterator.
 
 #[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
 pub enum ParserError<'s> {
-    #[error("Unexpected token: {token:?}")] // TODO: implement Display for Token
-    UnexpectedToken { token: &'s Token<'s> },
+    #[error("Expected {expected} on line {}, but got: {}", .token.line, .token.typ)]
+    UnexpectedToken {
+        expected: TokenType<'s>,
+        token: &'s Token<'s>,
+    },
     #[error("Unexpected end of input")]
     UnexpectedEndOfInput,
     #[error("Expected an expression, but got {token:?}")]
@@ -144,8 +147,6 @@ where
     fn term(&mut self) -> ParserResult<'s> {
         let mut expr = self.factor()?;
 
-        println!("factor: {:?}", expr);
-        println!("next: {:?}", self.tokens.peek());
         while let Some(operator) = self
             .tokens
             .next_if(|t| matches!(t.typ, TokenType::Minus | TokenType::Plus))
@@ -210,7 +211,10 @@ where
                             self.tokens
                                 .peek()
                                 .map_or(ParserError::UnexpectedEndOfInput, |token| {
-                                    ParserError::UnexpectedToken { token }
+                                    ParserError::UnexpectedToken {
+                                        expected: TokenType::RightParen,
+                                        token,
+                                    }
                                 })
                         })?;
                     Expr::Grouping {
@@ -248,23 +252,72 @@ mod tests {
                 typ: TokenType::Number(1.0),
                 lexeme: "1",
                 line: 0,
+
             },
         }),
         op: &Token {
             typ: TokenType::Plus,
             lexeme: "+",
             line: 0,
+
         },
         right: Box::new(Expr::Literal {
             token: &Token {
                 typ: TokenType::Number(2.0),
                 lexeme: "2",
                 line: 0,
+
             },
         }),
+    }))]
+    #[case("(1 + 2)", Ok(Expr::Grouping {
+        expr: Box::new(Expr::Binary {
+            left: Box::new(Expr::Literal {
+                token: &Token {
+                    typ: TokenType::Number(1.0),
+                    lexeme: "1",
+                    line: 0,
+                },
+            }),
+            op: &Token {
+                typ: TokenType::Plus,
+                lexeme: "+",
+                line: 0,
+            },
+            right: Box::new(Expr::Literal {
+                token: &Token {
+                    typ: TokenType::Number(2.0),
+                    lexeme: "2",
+                    line: 0,
+                },
+            }),
+        }),
+    }))]
+    #[case("(1 + 2", Err(ParserError::UnexpectedEndOfInput))]
+    #[case("(1 + 2 foo", Err(ParserError::UnexpectedToken {
+        expected: TokenType::RightParen,
+        token: &Token {
+            typ: TokenType::Identifier("foo"),
+            lexeme: "foo",
+            line: 0,
+        },
     }))]
     fn test_parse(#[case] source: &str, #[case] expected: ParserResult) {
         let tokens: Vec<Token> = scan(source).try_collect().unwrap();
         assert_eq!(parse(tokens.iter()), expected);
+    }
+
+    #[rstest]
+    #[case(ParserError::UnexpectedEndOfInput, "Unexpected end of input")]
+    #[case(ParserError::UnexpectedToken {
+        expected: TokenType::RightParen,
+        token: &Token {
+            typ: TokenType::Identifier("foo"),
+            lexeme: "foo",
+            line: 0,
+        },
+    }, "Expected ) on line 0, but got: an identifier")]
+    fn test_parse_error_display(#[case] err: ParserError, #[case] expected: &str) {
+        assert_eq!(err.to_string(), expected);
     }
 }

@@ -69,11 +69,10 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
 
     match expr {
         Ok(expr) => {
-            println!("{:?}", expr);
             println!("{}", expr);
         }
         Err(e) => {
-            eprintln!("{:?}", e);
+            eprintln!("{}", e);
             return Err(InterpreterError::ParserError);
         }
     }

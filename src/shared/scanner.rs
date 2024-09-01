@@ -1,4 +1,4 @@
-use std::str::CharIndices;
+use std::{fmt::Display, str::CharIndices};
 
 use thiserror::Error;
 
@@ -45,23 +45,71 @@ pub enum TokenType<'s> {
     While,
 }
 
-type LineNumber = usize;
+impl Display for TokenType<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                TokenType::LeftParen => "(",
+                TokenType::RightParen => ")",
+                TokenType::LeftBrace => "{",
+                TokenType::RightBrace => "}",
+                TokenType::Comma => ",",
+                TokenType::Dot => ".",
+                TokenType::Minus => "-",
+                TokenType::Plus => "+",
+                TokenType::Semicolon => ";",
+                TokenType::Slash => "/",
+                TokenType::Star => "*",
+                TokenType::Bang => "!",
+                TokenType::BangEqual => "!=",
+                TokenType::Equal => "=",
+                TokenType::EqualEqual => "==",
+                TokenType::Greater => ">",
+                TokenType::GreaterEqual => ">=",
+                TokenType::Less => "<",
+                TokenType::LessEqual => "<=",
+                TokenType::Identifier(_) => "an identifier",
+                TokenType::String(_) => "a string",
+                TokenType::Number(_) => "a number",
+                TokenType::And => "and",
+                TokenType::Class => "class",
+                TokenType::Else => "else",
+                TokenType::False => "false",
+                TokenType::For => "for",
+                TokenType::Fun => "fun",
+                TokenType::If => "if",
+                TokenType::Nil => "nil",
+                TokenType::Or => "or",
+                TokenType::Print => "print",
+                TokenType::Return => "return",
+                TokenType::Super => "super",
+                TokenType::This => "this",
+                TokenType::True => "true",
+                TokenType::Var => "var",
+                TokenType::Comment(_) => "a comment",
+                TokenType::While => "while",
+            }
+        )
+    }
+}
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub struct Token<'s> {
     pub typ: TokenType<'s>,
     pub lexeme: &'s str,
-    pub line: LineNumber,
+    pub line: usize,
 }
 
 #[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
 pub enum ScannerError {
     #[error("Unexpected character on line {line}: {char}")]
-    UnexpectedCharacter { line: LineNumber, char: char },
+    UnexpectedCharacter { line: usize, char: char },
     #[error("Unterminated string on line {line}")]
-    UnterminatedString { line: LineNumber },
+    UnterminatedString { line: usize },
     #[error("Invalid number on line {line}: {number}")]
-    InvalidNumber { line: LineNumber, number: String },
+    InvalidNumber { line: usize, number: String },
 }
 
 type ScannerResult<'s> = Result<Token<'s>, ScannerError>;
@@ -72,7 +120,7 @@ struct Scanner<'s> {
     cursor: CharIndices<'s>,
     current_offset: usize,
     lexeme_start: usize,
-    line: LineNumber,
+    line: usize,
 }
 
 impl<'s> From<&'s str> for Scanner<'s> {
