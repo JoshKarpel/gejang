@@ -1,4 +1,5 @@
 mod ast;
+mod interpreter;
 mod parser;
 
 use std::{io, io::Write, path::Path};
@@ -6,7 +7,7 @@ use std::{io, io::Write, path::Path};
 use anyhow::Result;
 use thiserror::Error;
 
-use crate::shared::scanner;
+use crate::{shared::scanner, walker::interpreter::Interpreter};
 
 pub fn script(path: &Path) -> Result<()> {
     let source = std::fs::read_to_string(path)?;
@@ -41,6 +42,8 @@ pub enum InterpreterError {
     ScannerError,
     #[error("Parser error")]
     ParserError,
+    #[error("Evaluation error")]
+    EvaluationError,
 }
 
 fn interpret(source: &str) -> Result<(), InterpreterError> {
@@ -67,9 +70,16 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
 
     let expr = parser::parse(tokens.iter());
 
+    let interpreter = Interpreter::new();
+
     match expr {
         Ok(expr) => {
             println!("{}", expr);
+            let result = interpreter.evaluate(&expr).map_err(|e| {
+                eprintln!("{:?}", e);
+                InterpreterError::EvaluationError
+            })?;
+            println!("{:?}", result);
         }
         Err(e) => {
             eprintln!("{}", e);
