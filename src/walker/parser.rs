@@ -16,8 +16,6 @@ pub enum ParserError<'s> {
     },
     #[error("Unexpected end of input")]
     UnexpectedEndOfInput,
-    #[error("Expected an expression, but got {token:?}")]
-    ExpectedExpression { token: &'s Token<'s> },
 }
 
 type ParserResult<'s> = Result<Expr<'s>, ParserError<'s>>;
@@ -221,7 +219,12 @@ where
                         expr: Box::new(expr),
                     }
                 }
-                _ => return Err(ParserError::ExpectedExpression { token }),
+                _ => {
+                    return Err(ParserError::UnexpectedToken {
+                        expected: TokenType::Identifier(""), // TODO: What should this be?
+                        token,
+                    });
+                }
             })
         } else {
             Err(ParserError::UnexpectedEndOfInput)
