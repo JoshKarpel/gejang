@@ -1,20 +1,21 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use thiserror::Error;
 
 use crate::{shared::scanner::TokenType, walker::ast::Expr};
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Value {
+pub enum Value<'s> {
+    // Is it really worth bringing those strings all the way from the source to here?
     #[allow(dead_code)]
-    Object(HashMap<String, Value>),
+    Object(HashMap<Cow<'s, str>, Value<'s>>),
     Number(f64),
-    String(String),
+    String(Cow<'s, str>),
     Boolean(bool),
     Nil,
 }
 
-impl Value {
+impl<'s> Value<'s> {
     pub fn is_truthy(&self) -> bool {
         match self {
             // TODO: implement Python-like truthiness
@@ -31,7 +32,7 @@ pub enum RuntimeError<'s> {
     Unimplemented { expr: &'s Expr<'s> },
 }
 
-type EvaluationResult<'s> = Result<Value, RuntimeError<'s>>;
+type EvaluationResult<'s> = Result<Value<'s>, RuntimeError<'s>>;
 
 #[derive(Debug)]
 pub struct Interpreter {}
@@ -45,7 +46,7 @@ impl Interpreter {
         Ok(match expr {
             Expr::Literal { token } => match token.typ {
                 TokenType::Number(value) => Value::Number(value),
-                TokenType::String(value) => Value::String(value.into()),
+                TokenType::String(value) => Value::String(Cow::from(value)),
                 TokenType::True => Value::Boolean(true),
                 TokenType::False => Value::Boolean(false),
                 TokenType::Nil => Value::Nil,
@@ -83,7 +84,9 @@ impl Interpreter {
                     (Value::Number(l), TokenType::LessEqual, Value::Number(r)) => {
                         Value::Boolean(l <= r)
                     }
-                    (Value::String(l), TokenType::Plus, Value::String(r)) => Value::String(l + &r),
+                    (Value::String(ref l), TokenType::Plus, Value::String(ref r)) => {
+                        Value::String(Cow::from(format!("{}{}", l, r)))
+                    }
                     (l, TokenType::EqualEqual, r) => Value::Boolean(l == r),
                     (l, TokenType::BangEqual, r) => Value::Boolean(l != r),
                     // TODO: more specific errors!
