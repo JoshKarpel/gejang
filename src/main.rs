@@ -1,4 +1,5 @@
 #![feature(test)]
+#![feature(iterator_try_collect)]
 
 use std::path::PathBuf;
 

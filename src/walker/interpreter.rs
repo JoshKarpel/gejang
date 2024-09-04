@@ -26,13 +26,13 @@ impl<'s> Value<'s> {
     }
 }
 
-#[derive(Error, Clone, Debug)]
-pub enum RuntimeError<'s> {
-    #[error("Unimplemented expression: {expr}")]
-    Unimplemented { expr: &'s Expr<'s> },
+#[derive(Error, Clone, Debug, PartialEq)]
+pub enum RuntimeError {
+    #[error("{msg}")]
+    Unimplemented { msg: String },
 }
 
-type EvaluationResult<'s> = Result<Value<'s>, RuntimeError<'s>>;
+type EvaluationResult<'s> = Result<Value<'s>, RuntimeError>;
 
 #[derive(Debug)]
 pub struct Interpreter {}
@@ -59,10 +59,14 @@ impl Interpreter {
                 match op.typ {
                     TokenType::Minus => match right {
                         Value::Number(value) => Value::Number(-value),
-                        _ => return Err(RuntimeError::Unimplemented { expr }),
+                        _ => {
+                            return Err(RuntimeError::Unimplemented {
+                                msg: "Cannot negate non-number".into(),
+                            })
+                        }
                     },
                     TokenType::Bang => Value::Boolean(!right.is_truthy()),
-                    _ => return Err(RuntimeError::Unimplemented { expr }),
+                    _ => unreachable!("Unary operator not implemented: {:?}", op),
                 }
             }
             Expr::Binary { left, op, right } => {
@@ -90,9 +94,39 @@ impl Interpreter {
                     (l, TokenType::EqualEqual, r) => Value::Boolean(l == r),
                     (l, TokenType::BangEqual, r) => Value::Boolean(l != r),
                     // TODO: more specific errors!
-                    _ => return Err(RuntimeError::Unimplemented { expr }),
+                    _ => {
+                        return Err(RuntimeError::Unimplemented {
+                            msg: "Binary operation not implemented".into(),
+                        })
+                    }
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use crate::{
+        shared::scanner::{scan, Token},
+        walker::{
+            interpreter::{EvaluationResult, Interpreter, RuntimeError, Value},
+            parser::parse,
+        },
+    };
+
+    #[rstest]
+    #[case("1", Ok(Value::Number(1.0)))]
+    #[case("1 + 2", Ok(Value::Number(3.0)))]
+    #[case("\"foo\" + \"bar\"", Ok(Value::String("foobar".into())))]
+    #[case("\"foo\" + 1", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented".into() }))]
+    fn test_interpreter(#[case] source: &str, #[case] expected: EvaluationResult) {
+        let interpreter = Interpreter::new();
+        let tokens: Vec<Token> = scan(source).try_collect().unwrap();
+        let expr = parse(tokens.iter()).unwrap();
+        let result = interpreter.evaluate(&expr);
+        assert_eq!(result, expected);
     }
 }
