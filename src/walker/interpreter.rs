@@ -1,10 +1,11 @@
 use std::{borrow::Cow, collections::HashMap};
 
+use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
 
 use crate::{shared::scanner::TokenType, walker::ast::Expr};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, AsRefStr, IntoStaticStr)]
 pub enum Value<'s> {
     // Is it really worth bringing those strings all the way from the source to here?
     #[allow(dead_code)]
@@ -94,9 +95,14 @@ impl Interpreter {
                     (l, TokenType::EqualEqual, r) => Value::Boolean(l == r),
                     (l, TokenType::BangEqual, r) => Value::Boolean(l != r),
                     // TODO: more specific errors!
-                    _ => {
+                    (l, o, r) => {
                         return Err(RuntimeError::Unimplemented {
-                            msg: "Binary operation not implemented".into(),
+                            msg: format!(
+                                "Binary operation not implemented: {} {} {}",
+                                l.as_ref(),
+                                o,
+                                r.as_ref()
+                            ),
                         })
                     }
                 }
@@ -119,9 +125,17 @@ mod tests {
 
     #[rstest]
     #[case("1", Ok(Value::Number(1.0)))]
+    #[case("\"foo\"", Ok(Value::String("foo".into())))]
+    #[case("true", Ok(Value::Boolean(true)))]
+    #[case("false", Ok(Value::Boolean(false)))]
+    #[case("nil", Ok(Value::Nil))]
     #[case("1 + 2", Ok(Value::Number(3.0)))]
     #[case("\"foo\" + \"bar\"", Ok(Value::String("foobar".into())))]
-    #[case("\"foo\" + 1", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented".into() }))]
+    #[case("\"foo\" + 1", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String + Number".into() }))]
+    #[case("1 + \"foo\"", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + String".into() }))]
+    #[case("1 + true", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
+    #[case("1 + false", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
+    #[case("1 + nil", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Nil".into() }))]
     fn test_interpreter(#[case] source: &str, #[case] expected: EvaluationResult) {
         let interpreter = Interpreter::new();
         let tokens: Vec<Token> = scan(source).try_collect().unwrap();
