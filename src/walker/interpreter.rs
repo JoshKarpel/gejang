@@ -138,6 +138,7 @@ mod tests {
     #[case("1 - 2", Ok(Value::Number(-1.0)))]
     #[case("1 / 2", Ok(Value::Number(0.5)))]
     #[case("2 * 2", Ok(Value::Number(4.0)))]
+    #[case("1 / 0", Ok(Value::Number(f64::INFINITY)))]
     #[case("2 == 2", Ok(Value::Boolean(true)))]
     #[case("2 != 2", Ok(Value::Boolean(false)))]
     #[case("1 == 2", Ok(Value::Boolean(false)))]

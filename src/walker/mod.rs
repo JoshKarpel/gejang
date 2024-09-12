@@ -5,6 +5,7 @@ mod parser;
 use std::{io, io::Write, path::Path};
 
 use anyhow::Result;
+use colored::Colorize;
 use itertools::Itertools;
 use thiserror::Error;
 
@@ -23,16 +24,19 @@ pub fn repl() -> Result<()> {
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
+    let prefix = "🦀> ";
+    let bad_prefix = "😵> ";
+    let mut error = false;
 
     loop {
-        print!("🦀> ");
+        print!("{}", if !error { prefix } else { bad_prefix });
         stdout.flush()?;
         let mut buffer = String::new();
         stdin.read_line(&mut buffer)?;
 
         match interpret(&buffer) {
-            Ok(_) => {}
-            Err(e) => eprintln!("{e}"),
+            Ok(_) => error = false,
+            Err(_) => error = true,
         }
     }
 }
@@ -52,7 +56,7 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
 
     if !errors.is_empty() {
         for e in errors {
-            eprintln!("{:?}", e);
+            eprintln!("{}", e.to_string().red());
         }
         return Err(InterpreterError::Scanner);
     }
@@ -63,15 +67,15 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
 
     match expr {
         Ok(expr) => {
-            println!("{}", expr);
+            println!("{}", expr.to_string().dimmed());
             let result = interpreter.evaluate(&expr).map_err(|e| {
-                eprintln!("{:?}", e);
+                eprintln!("{}", e.to_string().red());
                 InterpreterError::Evaluation
             })?;
             println!("{:?}", result);
         }
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("{}", e.to_string().red());
             return Err(InterpreterError::Parser);
         }
     }
