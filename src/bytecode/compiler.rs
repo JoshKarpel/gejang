@@ -1,3 +1,5 @@
+use std::iter::Peekable;
+
 use thiserror::Error;
 
 use crate::{
@@ -18,9 +20,37 @@ pub enum CompilerError<'s> {
 
 type CompileResult<'s> = Result<Chunk, CompilerError<'s>>;
 
+struct Compiler<I>
+where
+    I: Iterator,
+{
+    tokens: Peekable<I>,
+}
+
+impl<'s, I> From<I> for Compiler<I>
+where
+    I: Iterator<Item = &'s Token<'s>>,
+{
+    fn from(tokens: I) -> Self {
+        Compiler {
+            tokens: tokens.peekable(),
+        }
+    }
+}
+
+impl<'s, I> Compiler<I>
+where
+    I: Iterator<Item = &'s Token<'s>>,
+{
+    fn expression(&mut self) -> CompileResult<'s> {
+        Ok(Chunk::default())
+    }
+}
+
 pub fn compile<'s, I>(tokens: I) -> CompileResult<'s>
 where
     I: IntoIterator<Item = &'s Token<'s>>,
 {
-    Ok(Chunk::default())
+    let mut compiler = Compiler::from(tokens.into_iter());
+    compiler.expression()
 }
