@@ -1,8 +1,10 @@
 use std::{io, io::Write, path::Path};
 
 use anyhow::Result;
+use colored::Colorize;
+use itertools::Itertools;
 
-use crate::bytecode::interpret::VirtualMachine;
+use crate::{bytecode::interpret::VirtualMachine, shared::scanner, walker::InterpreterError};
 
 mod compiler;
 mod interpret;
@@ -35,8 +37,20 @@ pub fn repl() -> Result<()> {
     }
 }
 
-fn interpret(source: &str) -> Result<()> {
-    compiler::compile(source)?;
+fn interpret(source: &str) -> Result<(), InterpreterError> {
+    let (tokens, errors): (Vec<_>, Vec<_>) = scanner::scan(source).partition_result();
+
+    if !errors.is_empty() {
+        for e in errors {
+            eprintln!("{}", e.to_string().red());
+        }
+        return Err(InterpreterError::Scanner);
+    }
+
+    let chunk = compiler::compile(tokens.iter()).map_err(|e| {
+        eprintln!("{}", e.to_string().red());
+        InterpreterError::Compiler
+    })?;
 
     let _ = VirtualMachine::new();
 

@@ -17,7 +17,7 @@ pub enum OpCode {
 
 pub type Value = f64;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Chunk {
     pub code: Vec<OpCode>,
     pub constants: Vec<Value>,

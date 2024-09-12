@@ -47,6 +47,8 @@ pub enum InterpreterError {
     Scanner,
     #[error("Parser error")]
     Parser,
+    #[error("Compiler error")]
+    Compiler,
     #[error("Evaluation error")]
     Evaluation,
 }
