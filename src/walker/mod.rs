@@ -39,11 +39,11 @@ pub fn repl() -> Result<()> {
 #[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
 pub enum InterpreterError {
     #[error("Scanner error")]
-    ScannerError,
+    Scanner,
     #[error("Parser error")]
-    ParserError,
+    Parser,
     #[error("Evaluation error")]
-    EvaluationError,
+    Evaluation,
 }
 
 fn interpret(source: &str) -> Result<(), InterpreterError> {
@@ -65,7 +65,7 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
         for e in errors {
             eprintln!("{:?}", e);
         }
-        return Err(InterpreterError::ScannerError);
+        return Err(InterpreterError::Scanner);
     }
 
     let expr = parser::parse(tokens.iter());
@@ -77,13 +77,13 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
             println!("{}", expr);
             let result = interpreter.evaluate(&expr).map_err(|e| {
                 eprintln!("{:?}", e);
-                InterpreterError::EvaluationError
+                InterpreterError::Evaluation
             })?;
             println!("{:?}", result);
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(InterpreterError::ParserError);
+            return Err(InterpreterError::Parser);
         }
     }
 
