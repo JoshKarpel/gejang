@@ -5,6 +5,7 @@ mod parser;
 use std::{io, io::Write, path::Path};
 
 use anyhow::Result;
+use itertools::Itertools;
 use thiserror::Error;
 
 use crate::{shared::scanner, walker::interpreter::Interpreter};
@@ -47,19 +48,7 @@ pub enum InterpreterError {
 }
 
 fn interpret(source: &str) -> Result<(), InterpreterError> {
-    let mut tokens = vec![];
-    let mut errors = vec![];
-    for r in scanner::scan(source) {
-        match r {
-            Ok(token) => {
-                println!("{:?}", token);
-                tokens.push(token);
-            }
-            Err(e) => {
-                errors.push(e);
-            }
-        }
-    }
+    let (tokens, errors): (Vec<_>, Vec<_>) = scanner::scan(source).partition_result();
 
     if !errors.is_empty() {
         for e in errors {
