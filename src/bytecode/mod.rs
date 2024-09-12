@@ -4,11 +4,11 @@ use anyhow::Result;
 use colored::Colorize;
 use itertools::Itertools;
 
-use crate::{bytecode::interpret::VirtualMachine, shared::scanner, walker::InterpreterError};
+use crate::{bytecode::virtual_machine::VirtualMachine, shared::scanner, walker::InterpreterError};
 
 mod compiler;
-mod interpret;
 mod ops;
+mod virtual_machine;
 
 pub fn script(path: &Path) -> Result<()> {
     let source = std::fs::read_to_string(path)?;
@@ -52,7 +52,14 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
         InterpreterError::Compiler
     })?;
 
-    let _ = VirtualMachine::new();
+    let mut vm = VirtualMachine::new();
+
+    vm.interpret(&chunk, true)
+        .map_err(|e| {
+            eprintln!("{}", e.to_string().red());
+            InterpreterError::Evaluation
+        })
+        .inspect(|x| println!("{:?}", x))?;
 
     Ok(())
 }

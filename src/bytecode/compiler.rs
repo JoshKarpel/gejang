@@ -18,32 +18,34 @@ pub enum CompilerError<'s> {
     UnexpectedEndOfInput,
 }
 
-type CompileResult<'s> = Result<Chunk, CompilerError<'s>>;
+type CompileResult<'s> = Result<Chunk<'s>, CompilerError<'s>>;
 
-struct Compiler<I>
+struct Compiler<'s, I>
 where
     I: Iterator,
 {
     tokens: Peekable<I>,
+    chunk: Chunk<'s>,
 }
 
-impl<'s, I> From<I> for Compiler<I>
+impl<'s, I> From<I> for Compiler<'s, I>
 where
     I: Iterator<Item = &'s Token<'s>>,
 {
     fn from(tokens: I) -> Self {
         Compiler {
             tokens: tokens.peekable(),
+            chunk: Chunk::default(),
         }
     }
 }
 
-impl<'s, I> Compiler<I>
+impl<'s, I> Compiler<'s, I>
 where
     I: Iterator<Item = &'s Token<'s>>,
 {
-    fn expression(&mut self) -> CompileResult<'s> {
-        Ok(Chunk::default())
+    fn expression(self) -> CompileResult<'s> {
+        Ok(self.chunk)
     }
 }
 
@@ -51,6 +53,6 @@ pub fn compile<'s, I>(tokens: I) -> CompileResult<'s>
 where
     I: IntoIterator<Item = &'s Token<'s>>,
 {
-    let mut compiler = Compiler::from(tokens.into_iter());
+    let compiler = Compiler::from(tokens.into_iter());
     compiler.expression()
 }

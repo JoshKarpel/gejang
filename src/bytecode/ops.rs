@@ -4,6 +4,8 @@ use anyhow::{bail, Result};
 use itertools::Itertools;
 use strum_macros::{AsRefStr, IntoStaticStr};
 
+use crate::shared::values::Value;
+
 #[derive(Debug, AsRefStr, IntoStaticStr)]
 pub enum OpCode {
     Constant { index: u32 }, // the size of this int controls how many constants a block can have
@@ -15,18 +17,16 @@ pub enum OpCode {
     Return,
 }
 
-pub type Value = f64;
-
 #[derive(Debug, Default)]
-pub struct Chunk {
+pub struct Chunk<'s> {
     pub code: Vec<OpCode>,
-    pub constants: Vec<Value>,
+    pub constants: Vec<Value<'s>>,
     pub lines: Vec<u64>,
 }
 
-impl Chunk {
+impl<'s> Chunk<'s> {
     #[allow(dead_code)]
-    pub fn new(code: Vec<OpCode>, constants: Vec<Value>, lines: Vec<u64>) -> Result<Chunk> {
+    pub fn new(code: Vec<OpCode>, constants: Vec<Value<'s>>, lines: Vec<u64>) -> Result<Chunk> {
         if code.len() != lines.len() {
             bail!("Chunk code and lines must have same length, but they did not: len(code)={}, len(lines)={}", code.len(), lines.len())
         }
@@ -73,7 +73,7 @@ impl Chunk {
     }
 }
 
-impl Display for Chunk {
+impl<'s> Display for Chunk<'s> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
