@@ -120,7 +120,7 @@ impl<'s> VirtualMachine<'s> {
                     ip += 1;
                 }
                 OpCode::Constant { index } => {
-                    self.stack.push(chunk.constants[index as usize].clone()); // TODO: clone here, can we use COW?
+                    self.stack.push(chunk.constants[index].clone()); // TODO: clone here, can we use COW?
                     ip += 1;
                 }
             }

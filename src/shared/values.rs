@@ -2,6 +2,8 @@ use std::{borrow::Cow, collections::HashMap};
 
 use strum_macros::{AsRefStr, IntoStaticStr};
 
+use crate::shared::scanner::TokenType;
+
 #[derive(Debug, Clone, PartialEq, AsRefStr, IntoStaticStr)]
 pub enum Value<'s> {
     // Is it really worth bringing those strings all the way from the source to here?
@@ -11,6 +13,19 @@ pub enum Value<'s> {
     String(Cow<'s, str>),
     Boolean(bool),
     Nil,
+}
+
+impl<'s> From<&TokenType<'s>> for Value<'s> {
+    fn from(token: &TokenType<'s>) -> Self {
+        match token {
+            TokenType::Number(value) => Value::Number(*value),
+            TokenType::String(value) => Value::String(Cow::from(*value)),
+            TokenType::True => Value::Boolean(true),
+            TokenType::False => Value::Boolean(false),
+            TokenType::Nil => Value::Nil,
+            _ => unreachable!("Cannot get a literal value from token {:?}", token),
+        }
+    }
 }
 
 impl<'s> Value<'s> {

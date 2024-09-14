@@ -19,14 +19,7 @@ impl Interpreter {
 
     pub fn evaluate<'s>(&self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
-            Expr::Literal { token } => match token.typ {
-                TokenType::Number(value) => Value::Number(value),
-                TokenType::String(value) => Value::String(Cow::from(value)),
-                TokenType::True => Value::Boolean(true),
-                TokenType::False => Value::Boolean(false),
-                TokenType::Nil => Value::Nil,
-                _ => unreachable!("Literal token type not implemented: {:?}", token),
-            },
+            Expr::Literal { token } => Value::from(&token.typ),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
                 let right = self.evaluate(right)?;

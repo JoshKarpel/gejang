@@ -8,7 +8,7 @@ use crate::shared::values::Value;
 
 #[derive(Debug, AsRefStr, IntoStaticStr)]
 pub enum OpCode {
-    Constant { index: u32 }, // the size of this int controls how many constants a block can have
+    Constant { index: usize },
     Add,
     Subtract,
     Multiply,
@@ -21,12 +21,12 @@ pub enum OpCode {
 pub struct Chunk<'s> {
     pub code: Vec<OpCode>,
     pub constants: Vec<Value<'s>>,
-    pub lines: Vec<u64>,
+    pub lines: Vec<usize>,
 }
 
 impl<'s> Chunk<'s> {
     #[allow(dead_code)]
-    pub fn new(code: Vec<OpCode>, constants: Vec<Value<'s>>, lines: Vec<u64>) -> Result<Chunk> {
+    pub fn new(code: Vec<OpCode>, constants: Vec<Value<'s>>, lines: Vec<usize>) -> Result<Chunk> {
         if code.len() != lines.len() {
             bail!("Chunk code and lines must have same length, but they did not: len(code)={}, len(lines)={}", code.len(), lines.len())
         }
@@ -36,6 +36,19 @@ impl<'s> Chunk<'s> {
             constants,
             lines,
         })
+    }
+
+    pub fn add_constant(&mut self, value: Value<'s>, line: usize) {
+        self.constants.push(value);
+        self.code.push(OpCode::Constant {
+            index: self.constants.len() - 1,
+        });
+        self.lines.push(line)
+    }
+
+    pub fn write(&mut self, op: OpCode, line: usize) {
+        self.code.push(op);
+        self.lines.push(line);
     }
 
     pub fn fmt_instruction(&self, offset: usize) -> Option<String> {
@@ -64,10 +77,7 @@ impl<'s> Chunk<'s> {
                 format!("{offset:04} {line:04} {o}")
             }
             OpCode::Constant { index } => {
-                format!(
-                    "{offset:04} {line:04} {o} {:?}",
-                    self.constants[*index as usize]
-                )
+                format!("{offset:04} {line:04} {o} {:?}", self.constants[*index])
             }
         })
     }
@@ -77,7 +87,7 @@ impl<'s> Display for Chunk<'s> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{:?}",
+            "{}",
             (0..self.code.len())
                 .map(|offset| self.fmt_instruction(offset).unwrap().to_string())
                 .join("\n")

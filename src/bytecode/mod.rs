@@ -4,7 +4,11 @@ use anyhow::Result;
 use colored::Colorize;
 use itertools::Itertools;
 
-use crate::{bytecode::virtual_machine::VirtualMachine, shared::scanner, walker::InterpreterError};
+use crate::{
+    bytecode::{ops::OpCode, virtual_machine::VirtualMachine},
+    shared::scanner,
+    walker::InterpreterError,
+};
 
 mod compiler;
 mod ops;
@@ -47,10 +51,14 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
         return Err(InterpreterError::Scanner);
     }
 
-    let chunk = compiler::compile(tokens.iter()).map_err(|e| {
+    let mut chunk = compiler::compile(tokens.iter()).map_err(|e| {
         eprintln!("{}", e.to_string().red());
         InterpreterError::Compiler
     })?;
+
+    chunk.write(OpCode::Return, 0); // TODO: Remove this
+
+    println!("{}", chunk.to_string().dimmed());
 
     let mut vm = VirtualMachine::new();
 
