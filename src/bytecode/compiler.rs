@@ -51,10 +51,12 @@ where
     fn parse(&mut self, precedence: Precedence) -> IntermediateCompileResult<'s> {
         self.prefix()?;
 
-        while let Some(token) = self.tokens.peek() {
-            if precedence <= token.typ.precedence() {
-                self.infix()?
-            }
+        while self
+            .tokens
+            .peek()
+            .is_some_and(|token| precedence <= token.typ.precedence())
+        {
+            self.infix()?
         }
 
         Ok(())

@@ -52,11 +52,11 @@ impl<'s> VirtualMachine<'s> {
 
             match chunk.code[ip] {
                 OpCode::Return => {
-                    return Ok(self.stack.pop().unwrap());
+                    return Ok(self.stack.pop().expect("Popped from empty stack"));
                 }
                 OpCode::Add => {
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().expect("Popped from empty stack");
+                    let a = self.stack.pop().expect("Popped from empty stack");
                     self.stack.push(match (&a, &b) {
                         (Value::Number(a), Value::Number(b)) => Value::Number(a + b),
                         _ => {
@@ -68,8 +68,8 @@ impl<'s> VirtualMachine<'s> {
                     ip += 1;
                 }
                 OpCode::Subtract => {
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().expect("Popped from empty stack");
+                    let a = self.stack.pop().expect("Popped from empty stack");
                     self.stack.push(match (&a, &b) {
                         (Value::Number(a), Value::Number(b)) => Value::Number(a - b),
                         _ => {
@@ -81,8 +81,8 @@ impl<'s> VirtualMachine<'s> {
                     ip += 1;
                 }
                 OpCode::Multiply => {
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().expect("Popped from empty stack");
+                    let a = self.stack.pop().expect("Popped from empty stack");
                     self.stack.push(match (&a, &b) {
                         (Value::Number(a), Value::Number(b)) => Value::Number(a * b),
                         _ => {
@@ -94,8 +94,8 @@ impl<'s> VirtualMachine<'s> {
                     ip += 1;
                 }
                 OpCode::Divide => {
-                    let b = self.stack.pop().unwrap();
-                    let a = self.stack.pop().unwrap();
+                    let b = self.stack.pop().expect("Popped from empty stack");
+                    let a = self.stack.pop().expect("Popped from empty stack");
                     self.stack.push(match (&a, &b) {
                         (Value::Number(a), Value::Number(b)) => Value::Number(a / b),
                         _ => {
@@ -108,7 +108,7 @@ impl<'s> VirtualMachine<'s> {
                 }
 
                 OpCode::Negate => {
-                    let value = self.stack.pop().unwrap();
+                    let value = self.stack.pop().expect("Popped from empty stack");
                     self.stack.push(match value {
                         Value::Number(ref value) => Value::Number(-value),
                         _ => {
@@ -127,3 +127,6 @@ impl<'s> VirtualMachine<'s> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {}
