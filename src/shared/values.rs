@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
 use strum_macros::{AsRefStr, IntoStaticStr};
 
@@ -36,5 +36,21 @@ impl<'s> Value<'s> {
             Value::Nil => false,
             _ => true,
         }
+    }
+}
+
+impl Display for Value<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Value::Object(_) => "object".to_string(), // TODO: implement better object display
+                Value::Number(value) => value.to_string(),
+                Value::String(value) => value.to_string(),
+                Value::Boolean(value) => value.to_string(),
+                Value::Nil => "nil".to_string(),
+            }
+        )
     }
 }

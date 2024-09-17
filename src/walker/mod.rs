@@ -59,23 +59,22 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
         return Err(InterpreterError::Scanner);
     }
 
-    let expr = parser::parse(tokens.iter());
+    let (statements, errors): (Vec<_>, Vec<_>) =
+        parser::parse(tokens.iter()).into_iter().partition_result();
+
+    if !errors.is_empty() {
+        for e in errors {
+            eprintln!("{}", e.to_string().red());
+        }
+        return Err(InterpreterError::Parser);
+    }
 
     let interpreter = Interpreter::new();
 
-    match expr {
-        Ok(expr) => {
-            println!("{}", expr.to_string().dimmed());
-            let _ = interpreter
-                .evaluate(&expr)
-                .inspect(|v| println!("{:?}", v))
-                .inspect_err(|e| eprintln!("{}", e.to_string().red()))
-                .map_err(|_| InterpreterError::Evaluation)?;
-            Ok(())
-        }
-        Err(e) => {
-            eprintln!("{}", e.to_string().red());
-            Err(InterpreterError::Parser)
-        }
-    }
+    interpreter.interpret(&statements).map_err(|e| {
+        eprintln!("{}", e.to_string().red());
+        InterpreterError::Evaluation
+    })?;
+
+    Ok(())
 }

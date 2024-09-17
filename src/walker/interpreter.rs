@@ -6,7 +6,7 @@ use crate::{
         scanner::TokenType,
         values::Value,
     },
-    walker::ast::Expr,
+    walker::ast::{Expr, Stmt},
 };
 
 #[derive(Debug)]
@@ -15,6 +15,28 @@ pub struct Interpreter {}
 impl Interpreter {
     pub fn new() -> Self {
         Self {}
+    }
+
+    pub fn interpret<'s>(&self, statements: &'s [Stmt<'s>]) -> EvaluationResult<'s> {
+        for stmt in statements {
+            self.execute(stmt)?;
+        }
+
+        // TODO: Not really supposed to return anything but maybe it doesn't matter?
+        // I guess that's what an expression oriented language is for!
+        Ok(Value::Nil)
+    }
+
+    pub fn execute<'s>(&self, stmt: &'s Stmt<'s>) -> EvaluationResult<'s> {
+        match stmt {
+            Stmt::Expression { expr } => self.evaluate(expr)?,
+            Stmt::Print { expr } => {
+                let value = self.evaluate(expr)?;
+                println!("{}", &value);
+                value
+            }
+        };
+        Ok(Value::Nil)
     }
 
     pub fn evaluate<'s>(&self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {

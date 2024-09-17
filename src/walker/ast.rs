@@ -45,6 +45,29 @@ impl Display for Expr<'_> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum Stmt<'s> {
+    Expression { expr: E<'s> },
+    Print { expr: E<'s> },
+}
+
+impl Display for Stmt<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Stmt::Expression { expr } => {
+                    format!("(expression {})", expr)
+                }
+                Stmt::Print { expr } => {
+                    format!("(print {})", expr)
+                }
+            }
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
