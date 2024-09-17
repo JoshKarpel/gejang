@@ -2,7 +2,7 @@ mod ast;
 mod interpreter;
 mod parser;
 
-use std::{io, io::Write, path::Path};
+use std::{io, io::Write};
 
 use anyhow::Result;
 use colored::Colorize;
@@ -11,10 +11,8 @@ use thiserror::Error;
 
 use crate::{shared::scanner, walker::interpreter::Interpreter};
 
-pub fn script(path: &Path) -> Result<()> {
-    let source = std::fs::read_to_string(path)?;
-
-    interpret(&source)?;
+pub fn exec(source: &str) -> Result<()> {
+    interpret(source)?;
 
     Ok(())
 }
@@ -47,8 +45,6 @@ pub enum InterpreterError {
     Scanner,
     #[error("Parser error")]
     Parser,
-    #[error("Compiler error")]
-    Compiler,
     #[error("Evaluation error")]
     Evaluation,
 }
@@ -70,17 +66,16 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
     match expr {
         Ok(expr) => {
             println!("{}", expr.to_string().dimmed());
-            let result = interpreter.evaluate(&expr).map_err(|e| {
-                eprintln!("{}", e.to_string().red());
-                InterpreterError::Evaluation
-            })?;
-            println!("{:?}", result);
+            let _ = interpreter
+                .evaluate(&expr)
+                .inspect(|v| println!("{:?}", v))
+                .inspect_err(|e| eprintln!("{}", e.to_string().red()))
+                .map_err(|_| InterpreterError::Evaluation)?;
+            Ok(())
         }
         Err(e) => {
             eprintln!("{}", e.to_string().red());
-            return Err(InterpreterError::Parser);
+            Err(InterpreterError::Parser)
         }
     }
-
-    Ok(())
 }
