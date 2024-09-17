@@ -1,12 +1,18 @@
 use std::{io, io::Write, path::Path};
 
 use anyhow::Result;
+use colored::Colorize;
+use itertools::Itertools;
 
-use crate::bytecode::interpret::VirtualMachine;
+use crate::{
+    bytecode::{ops::OpCode, virtual_machine::VirtualMachine},
+    shared::scanner,
+    walker::InterpreterError,
+};
 
 mod compiler;
-mod interpret;
 mod ops;
+mod virtual_machine;
 
 pub fn script(path: &Path) -> Result<()> {
     let source = std::fs::read_to_string(path)?;
@@ -35,10 +41,33 @@ pub fn repl() -> Result<()> {
     }
 }
 
-fn interpret(source: &str) -> Result<()> {
-    compiler::compile(source)?;
+fn interpret(source: &str) -> Result<(), InterpreterError> {
+    let (tokens, errors): (Vec<_>, Vec<_>) = scanner::scan(source).partition_result();
 
-    let _ = VirtualMachine::new();
+    if !errors.is_empty() {
+        for e in errors {
+            eprintln!("{}", e.to_string().red());
+        }
+        return Err(InterpreterError::Scanner);
+    }
+
+    let mut chunk = compiler::compile(tokens.iter()).map_err(|e| {
+        eprintln!("{}", e.to_string().red());
+        InterpreterError::Compiler
+    })?;
+
+    chunk.write(OpCode::Return, 0); // TODO: Remove this
+
+    println!("{}", chunk.to_string().dimmed());
+
+    let mut vm = VirtualMachine::new();
+
+    vm.interpret(&chunk, true)
+        .map_err(|e| {
+            eprintln!("{}", e.to_string().red());
+            InterpreterError::Evaluation
+        })
+        .inspect(|x| println!("{:?}", x))?;
 
     Ok(())
 }

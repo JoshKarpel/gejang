@@ -1,39 +1,13 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::borrow::Cow;
 
-use strum_macros::{AsRefStr, IntoStaticStr};
-use thiserror::Error;
-
-use crate::{shared::scanner::TokenType, walker::ast::Expr};
-
-#[derive(Debug, Clone, PartialEq, AsRefStr, IntoStaticStr)]
-pub enum Value<'s> {
-    // Is it really worth bringing those strings all the way from the source to here?
-    #[allow(dead_code)]
-    Object(HashMap<Cow<'s, str>, Value<'s>>),
-    Number(f64),
-    String(Cow<'s, str>),
-    Boolean(bool),
-    Nil,
-}
-
-impl<'s> Value<'s> {
-    pub fn is_truthy(&self) -> bool {
-        match self {
-            // TODO: implement Python-like truthiness
-            Value::Boolean(value) => *value,
-            Value::Nil => false,
-            _ => true,
-        }
-    }
-}
-
-#[derive(Error, Clone, Debug, PartialEq)]
-pub enum RuntimeError {
-    #[error("{msg}")]
-    Unimplemented { msg: String },
-}
-
-type EvaluationResult<'s> = Result<Value<'s>, RuntimeError>;
+use crate::{
+    shared::{
+        errors::{EvaluationResult, RuntimeError},
+        scanner::TokenType,
+        values::Value,
+    },
+    walker::ast::Expr,
+};
 
 #[derive(Debug)]
 pub struct Interpreter {}
@@ -45,14 +19,7 @@ impl Interpreter {
 
     pub fn evaluate<'s>(&self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
-            Expr::Literal { token } => match token.typ {
-                TokenType::Number(value) => Value::Number(value),
-                TokenType::String(value) => Value::String(Cow::from(value)),
-                TokenType::True => Value::Boolean(true),
-                TokenType::False => Value::Boolean(false),
-                TokenType::Nil => Value::Nil,
-                _ => unreachable!("Literal token type not implemented: {:?}", token),
-            },
+            Expr::Literal { token } => Value::from(&token.typ),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
                 let right = self.evaluate(right)?;
@@ -116,11 +83,12 @@ mod tests {
     use rstest::rstest;
 
     use crate::{
-        shared::scanner::{scan, Token},
-        walker::{
-            interpreter::{EvaluationResult, Interpreter, RuntimeError, Value},
-            parser::parse,
+        shared::{
+            errors::{EvaluationResult, RuntimeError},
+            scanner::{scan, Token},
+            values::Value,
         },
+        walker::{interpreter::Interpreter, parser::parse},
     };
 
     #[rstest]

@@ -96,6 +96,49 @@ impl Display for TokenType<'_> {
 }
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
+pub enum Precedence {
+    None,
+    Assignment,
+    Or,
+    And,
+    Equality,
+    Comparison,
+    Term,
+    Factor,
+    Unary,
+    Call,
+    Primary,
+}
+
+impl Precedence {
+    pub fn next(&self) -> Self {
+        match self {
+            Precedence::None => Precedence::Assignment,
+            Precedence::Assignment => Precedence::Or,
+            Precedence::Or => Precedence::And,
+            Precedence::And => Precedence::Equality,
+            Precedence::Equality => Precedence::Comparison,
+            Precedence::Comparison => Precedence::Term,
+            Precedence::Term => Precedence::Factor,
+            Precedence::Factor => Precedence::Unary,
+            Precedence::Unary => Precedence::Call,
+            Precedence::Call => Precedence::Primary,
+            Precedence::Primary => unreachable!("No precedence higher than Primary"),
+        }
+    }
+}
+
+impl TokenType<'_> {
+    pub fn precedence(&self) -> Precedence {
+        match self {
+            TokenType::Plus | TokenType::Minus => Precedence::Term,
+            TokenType::Star | TokenType::Slash => Precedence::Factor,
+            _ => Precedence::None,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub struct Token<'s> {
     pub typ: TokenType<'s>,
     pub lexeme: &'s str,
