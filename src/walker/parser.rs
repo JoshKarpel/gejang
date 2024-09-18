@@ -361,7 +361,8 @@ mod tests {
     }))]
     fn test_parse(#[case] source: &str, #[case] expected: ParserExprResult) {
         let tokens: Vec<Token> = scan(source).try_collect().unwrap();
-        assert_eq!(parse(tokens.iter()), expected);
+        let mut parser = Parser::from(tokens.iter());
+        assert_eq!(parser.expression(), expected);
     }
 
     #[rstest]
