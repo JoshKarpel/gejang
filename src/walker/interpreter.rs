@@ -1,23 +1,29 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    io::{Read, Write},
+};
 
 use crate::{
     shared::{
         errors::{EvaluationResult, RuntimeError},
         scanner::TokenType,
+        streams::Streams,
         values::Value,
     },
     walker::ast::{Expr, Stmt},
 };
 
 #[derive(Debug)]
-pub struct Interpreter {}
+pub struct Interpreter<'io, I: Read, O: Write, E: Write> {
+    streams: &'io mut Streams<I, O, E>,
+}
 
-impl Interpreter {
-    pub fn new() -> Self {
-        Self {}
+impl<'io, I: Read, O: Write, E: Write> Interpreter<'io, I, O, E> {
+    pub fn new(streams: &'io mut Streams<I, O, E>) -> Self {
+        Self { streams }
     }
 
-    pub fn interpret<'s>(&self, statements: &'s [Stmt<'s>]) -> EvaluationResult<'s> {
+    pub fn interpret<'s>(&mut self, statements: &'s [Stmt<'s>]) -> EvaluationResult<'s> {
         for stmt in statements {
             self.execute(stmt)?;
         }
@@ -27,19 +33,19 @@ impl Interpreter {
         Ok(Value::Nil)
     }
 
-    pub fn execute<'s>(&self, stmt: &'s Stmt<'s>) -> EvaluationResult<'s> {
+    pub fn execute<'s>(&mut self, stmt: &'s Stmt<'s>) -> EvaluationResult<'s> {
         match stmt {
             Stmt::Expression { expr } => self.evaluate(expr)?,
             Stmt::Print { expr } => {
                 let value = self.evaluate(expr)?;
-                println!("{}", &value);
+                write!(self.streams.output, "{}", &value).map_err(|_| RuntimeError::PrintFailed)?;
                 value
             }
         };
         Ok(Value::Nil)
     }
 
-    pub fn evaluate<'s>(&self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
+    pub fn evaluate<'s>(&mut self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
             Expr::Literal { token } => Value::from(&token.typ),
             Expr::Grouping { expr } => self.evaluate(expr)?,
@@ -108,6 +114,7 @@ mod tests {
         shared::{
             errors::{EvaluationResult, RuntimeError},
             scanner::{scan, Token},
+            streams::Streams,
             values::Value,
         },
         walker::{ast::Stmt, interpreter::Interpreter, parser::parse},
@@ -146,17 +153,27 @@ mod tests {
     #[case("2 > 2;", Ok(Value::Boolean(false)))]
     #[case("3 > 2;", Ok(Value::Boolean(true)))]
     #[case("\"foo\" + \"bar\";", Ok(Value::String("foobar".into())))]
-    #[case("\"foo\" + 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String + Number".into() }))]
-    #[case("1 + \"foo\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + String".into() }))]
-    #[case("1 + true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
-    #[case("1 + false;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
-    #[case("1 + nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Nil".into() }))]
-    #[case("\"foo\" > true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Boolean".into() }))]
-    #[case("\"foo\" > \"bar\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > String".into() }))]
-    #[case("\"foo\" > 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Number".into() }))]
-    #[case("\"foo\" > nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Nil".into() }))]
+    #[case("\"foo\" + 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String + Number".into() }
+    ))]
+    #[case("1 + \"foo\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + String".into() }
+    ))]
+    #[case("1 + true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }
+    ))]
+    #[case("1 + false;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }
+    ))]
+    #[case("1 + nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Nil".into() }
+    ))]
+    #[case("\"foo\" > true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Boolean".into() }
+    ))]
+    #[case("\"foo\" > \"bar\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > String".into() }
+    ))]
+    #[case("\"foo\" > 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Number".into() }
+    ))]
+    #[case("\"foo\" > nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Nil".into() }
+    ))]
     fn test_evaluate(#[case] source: &str, #[case] expected: EvaluationResult) {
-        let interpreter = Interpreter::new();
+        let mut streams = Streams::test();
+        let mut interpreter = Interpreter::new(&mut streams);
         let tokens: Vec<Token> = scan(source).try_collect().expect("Failed to scan tokens");
         let stmt = parse(tokens.iter())
             .pop()
