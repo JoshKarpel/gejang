@@ -97,8 +97,12 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
+
     #[rstest]
     #[case("print 1 + 2;", "3")]
+    #[case("print 2 * 4 + 3;", "11")]
+    #[case("print true;", "true")]
+    #[case("print \"one\";", "one")]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         let mut streams = Streams::test();
         interpret(source, &mut streams).unwrap();
