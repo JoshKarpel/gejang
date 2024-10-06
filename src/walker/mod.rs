@@ -94,7 +94,6 @@ fn interpret<I: Read, O: Write, E: Write>(
 
 #[cfg(test)]
 mod tests {
-
     use rstest::rstest;
 
     use super::*;

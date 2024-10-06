@@ -28,7 +28,7 @@ impl<'s> From<&TokenType<'s>> for Value<'s> {
     }
 }
 
-impl<'s> Value<'s> {
+impl Value<'_> {
     pub fn is_truthy(&self) -> bool {
         match self {
             // TODO: implement Python-like truthiness
