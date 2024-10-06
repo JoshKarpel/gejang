@@ -101,9 +101,50 @@ where
     fn parse(&mut self) -> Vec<ParserStmtResult<'s>> {
         let mut statements = Vec::new();
         while self.tokens.peek().is_some() {
-            statements.push(self.statement());
+            statements.push(self.declaration());
         }
         statements
+    }
+
+    fn declaration(&mut self) -> ParserStmtResult<'s> {
+        (if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Var))
+            .is_some()
+        {
+            self.variable_declaration()
+        } else {
+            self.statement()
+        })
+        .inspect_err(|_| self.synchronize())
+    }
+
+    fn variable_declaration(&mut self) -> ParserStmtResult<'s> {
+        if let Some(name) = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+        {
+            let initializer =
+                if let Some(_) = self.tokens.next_if(|t| matches!(t.typ, TokenType::Equal)) {
+                    Some(Box::new(self.expression()?))
+                } else {
+                    None
+                };
+
+            self.require_semicolon();
+
+            Ok(Stmt::Var { name, initializer })
+        } else {
+            Err(self
+                .tokens
+                .peek()
+                .map_or(ParserError::UnexpectedEndOfInput, |token| {
+                    ParserError::UnexpectedToken {
+                        expected: TokenType::Semicolon,
+                        token,
+                    }
+                }))
+        }
     }
 
     fn statement(&mut self) -> ParserStmtResult<'s> {
@@ -249,11 +290,11 @@ where
     fn primary(&mut self) -> ParserExprResult<'s> {
         if let Some(token) = self.tokens.next() {
             Ok(match token.typ {
-                TokenType::False => Expr::Literal { token },
-                TokenType::True => Expr::Literal { token },
-                TokenType::Nil => Expr::Literal { token },
-                TokenType::Number(_) => Expr::Literal { token },
-                TokenType::String(_) => Expr::Literal { token },
+                TokenType::False => Expr::Literal { value: token },
+                TokenType::True => Expr::Literal { value: token },
+                TokenType::Nil => Expr::Literal { value: token },
+                TokenType::Number(_) => Expr::Literal { value: token },
+                TokenType::String(_) => Expr::Literal { value: token },
                 TokenType::LeftParen => {
                     let expr = self.expression()?;
                     self.tokens
@@ -272,6 +313,7 @@ where
                         expr: Box::new(expr),
                     }
                 }
+                TokenType::Identifier(_) => Expr::Variable { name: token },
                 _ => {
                     return Err(ParserError::UnexpectedToken {
                         expected: TokenType::Identifier(""), // TODO: What should this be?
@@ -305,7 +347,7 @@ mod tests {
     #[rstest]
     #[case("1 + 2", Ok(Expr::Binary {
         left: Box::new(Expr::Literal {
-            token: &Token {
+            value: &Token {
                 typ: TokenType::Number(1.0),
                 lexeme: "1",
                 line: 0,
@@ -319,7 +361,7 @@ mod tests {
 
         },
         right: Box::new(Expr::Literal {
-            token: &Token {
+            value: &Token {
                 typ: TokenType::Number(2.0),
                 lexeme: "2",
                 line: 0,
@@ -330,7 +372,7 @@ mod tests {
     #[case("(1 + 2)", Ok(Expr::Grouping {
         expr: Box::new(Expr::Binary {
             left: Box::new(Expr::Literal {
-                token: &Token {
+                value: &Token {
                     typ: TokenType::Number(1.0),
                     lexeme: "1",
                     line: 0,
@@ -342,7 +384,7 @@ mod tests {
                 line: 0,
             },
             right: Box::new(Expr::Literal {
-                token: &Token {
+                value: &Token {
                     typ: TokenType::Number(2.0),
                     lexeme: "2",
                     line: 0,

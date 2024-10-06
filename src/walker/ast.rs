@@ -20,7 +20,10 @@ pub enum Expr<'s> {
         expr: E<'s>,
     },
     Literal {
-        token: T<'s>,
+        value: T<'s>,
+    },
+    Variable {
+        name: T<'s>,
     },
 }
 
@@ -39,7 +42,8 @@ impl Display for Expr<'_> {
                 Expr::Grouping { expr } => {
                     format!("(grouping {})", expr)
                 }
-                Expr::Literal { token } => token.lexeme.into(),
+                Expr::Literal { value: token } => token.lexeme.into(),
+                Expr::Variable { name } => name.lexeme.into(),
             }
         )
     }
@@ -47,8 +51,16 @@ impl Display for Expr<'_> {
 
 #[derive(Debug, PartialEq)]
 pub enum Stmt<'s> {
-    Expression { expr: E<'s> },
-    Print { expr: E<'s> },
+    Expression {
+        expr: E<'s>,
+    },
+    Print {
+        expr: E<'s>,
+    },
+    Var {
+        name: T<'s>,
+        initializer: Option<E<'s>>,
+    },
 }
 
 impl Display for Stmt<'_> {
@@ -58,10 +70,17 @@ impl Display for Stmt<'_> {
             "{}",
             match self {
                 Stmt::Expression { expr } => {
-                    format!("(expression {})", expr)
+                    format!("(expression {expr})")
                 }
                 Stmt::Print { expr } => {
-                    format!("(print {})", expr)
+                    format!("(print {expr})")
+                }
+                Stmt::Var { name, initializer } => {
+                    if let Some(init) = initializer {
+                        format!("(var {name} {init})")
+                    } else {
+                        format!("(var {name})")
+                    }
                 }
             }
         )
@@ -81,7 +100,7 @@ mod tests {
     #[case(
         Expr::Binary {
             left: Box::new(Expr::Literal {
-                token: &Token {
+                value: &Token {
                     typ: TokenType::Number(1.0),
                     lexeme: "1",
                     line: 0,
@@ -94,7 +113,7 @@ mod tests {
 
             },
             right: Box::new(Expr::Literal {
-                token: &Token {
+                value: &Token {
                     typ: TokenType::Number(2.0),
                     lexeme: "2",
                     line: 0,
@@ -114,7 +133,7 @@ mod tests {
 
                 },
                 right: Box::new(Expr::Literal {
-                    token: &Token {
+                    value: &Token {
                         typ: TokenType::Number(1.0),
                         lexeme: "1",
                         line: 0,
@@ -130,7 +149,7 @@ mod tests {
             },
             right: Box::new(Expr::Grouping {
                 expr: Box::new(Expr::Literal {
-                    token: &Token {
+                    value: &Token {
                         typ: TokenType::Number(2.0),
                         lexeme: "2",
                         line: 0,

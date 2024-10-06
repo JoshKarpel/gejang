@@ -47,7 +47,7 @@ impl<'io, I: Read, O: Write, E: Write> Interpreter<'io, I, O, E> {
 
     pub fn evaluate<'s>(&mut self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
-            Expr::Literal { token } => Value::from(&token.typ),
+            Expr::Literal { value: token } => Value::from(&token.typ),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
                 let right = self.evaluate(right)?;
