@@ -1,12 +1,13 @@
 use std::{
     borrow::Cow,
+    collections::HashMap,
     io::{Read, Write},
 };
 
 use crate::{
     shared::{
         errors::{EvaluationResult, RuntimeError},
-        scanner::TokenType,
+        scanner::{Token, TokenType},
         streams::Streams,
         values::Value,
     },
@@ -14,13 +15,43 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Interpreter<'io, I: Read, O: Write, E: Write> {
+struct Environment<'s> {
+    values: HashMap<Cow<'s, str>, Value<'s>>,
+}
+
+impl<'s> Environment<'s> {
+    fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
+        self.values.insert(name, value);
+    }
+
+    fn get(&mut self, name: &Token<'s>) -> EvaluationResult {
+        self.values
+            .get(name.lexeme)
+            .map(|v| v)
+            .ok_or_else(|| RuntimeError::UndefinedVariable { name: name.lexeme })
+    }
+}
+
+impl<'s> Default for Environment<'s> {
+    fn default() -> Self {
+        Self {
+            values: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Interpreter<'s, 'io, I: Read, O: Write, E: Write> {
+    environment: Environment<'s>,
     streams: &'io mut Streams<I, O, E>,
 }
 
-impl<'io, I: Read, O: Write, E: Write> Interpreter<'io, I, O, E> {
+impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
     pub fn new(streams: &'io mut Streams<I, O, E>) -> Self {
-        Self { streams }
+        Self {
+            environment: Environment::default(),
+            streams,
+        }
     }
 
     pub fn interpret<'s>(&mut self, statements: &'s [Stmt<'s>]) -> EvaluationResult<'s> {
@@ -30,7 +61,7 @@ impl<'io, I: Read, O: Write, E: Write> Interpreter<'io, I, O, E> {
 
         // TODO: Not really supposed to return anything but maybe it doesn't matter?
         // I guess that's what an expression oriented language is for!
-        Ok(Value::Nil)
+        Ok(Cow::Owned(Value::Nil))
     }
 
     pub fn execute<'s>(&mut self, stmt: &'s Stmt<'s>) -> EvaluationResult<'s> {
@@ -41,18 +72,22 @@ impl<'io, I: Read, O: Write, E: Write> Interpreter<'io, I, O, E> {
                 write!(self.streams.output, "{}", &value).map_err(|_| RuntimeError::PrintFailed)?;
                 value
             }
+            Stmt::Var { name, initializer } => self.environment.define(
+                name.lexeme,
+                initializer.map_or(Value::Nil, |i| self.evaluate(i)),
+            ),
         };
-        Ok(Value::Nil)
+        Ok(Cow::Owned(Value::Nil))
     }
 
     pub fn evaluate<'s>(&mut self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
-            Expr::Literal { value: token } => Value::from(&token.typ),
+            Expr::Literal { value: token } => Cow::Owned(Value::from(&token.typ)),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
-                let right = self.evaluate(right)?;
+                let right = self.evaluate(right)?.as_ref();
 
-                match op.typ {
+                Cow::Owned(match op.typ {
                     TokenType::Minus => match right {
                         Value::Number(value) => Value::Number(-value),
                         _ => {
@@ -63,13 +98,13 @@ impl<'io, I: Read, O: Write, E: Write> Interpreter<'io, I, O, E> {
                     },
                     TokenType::Bang => Value::Boolean(!right.is_truthy()),
                     _ => unreachable!("Unary operator not implemented: {:?}", op),
-                }
+                })
             }
             Expr::Binary { left, op, right } => {
-                let left = self.evaluate(left)?;
-                let right = self.evaluate(right)?;
+                let left = self.evaluate(left)?.as_ref();
+                let right = self.evaluate(right)?.as_ref();
 
-                match (left, op.typ, right) {
+                let result = match (left, op.typ, right) {
                     (Value::Number(l), TokenType::Plus, Value::Number(r)) => Value::Number(l + r),
                     (Value::Number(l), TokenType::Minus, Value::Number(r)) => Value::Number(l - r),
                     (Value::Number(l), TokenType::Star, Value::Number(r)) => Value::Number(l * r),
@@ -100,8 +135,11 @@ impl<'io, I: Read, O: Write, E: Write> Interpreter<'io, I, O, E> {
                             ),
                         })
                     }
-                }
+                };
+
+                Cow::Owned(result)
             }
+            Expr::Variable { name } => self.environment.get(name)?,
         })
     }
 }
@@ -122,7 +160,7 @@ mod tests {
 
     #[rstest]
     #[case("1;", Ok(Value::Number(1.0)))]
-    #[case("\"foo\";", Ok(Value::String("foo".into())))]
+    #[case("\"foo\";", Ok(Value::String("foo")))]
     #[case("true;", Ok(Value::Boolean(true)))]
     #[case("false;", Ok(Value::Boolean(false)))]
     #[case("nil;", Ok(Value::Nil))]

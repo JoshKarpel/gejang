@@ -103,6 +103,8 @@ mod tests {
     #[case("print 2 * 4 + 3;", "11")]
     #[case("print true;", "true")]
     #[case("print \"one\";", "one")]
+    #[case("var foo = "bar"; print foo;", "bar")]
+    #[case("var foo = 1 + 2 * 6; print foo;", "13")]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         let mut streams = Streams::test();
         interpret(source, &mut streams).unwrap();
