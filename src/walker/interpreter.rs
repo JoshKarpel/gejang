@@ -16,19 +16,21 @@ use crate::{
 
 #[derive(Debug)]
 struct Environment<'s> {
-    values: HashMap<Cow<'s, str>, Value<'s>>,
+    values: HashMap<Cow<'s, str>, Cow<'s, Value<'s>>>,
 }
 
 impl<'s> Environment<'s> {
-    fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
+    fn define(&mut self, name: Cow<'s, str>, value: Cow<'s, Value<'s>>) {
         self.values.insert(name, value);
     }
 
     fn get(&mut self, name: &Token<'s>) -> EvaluationResult {
         self.values
             .get(name.lexeme)
-            .map(|v| v)
-            .ok_or_else(|| RuntimeError::UndefinedVariable { name: name.lexeme })
+            .map(|v| v.clone()) // TODO: no! We need to be able to mutate objects
+            .ok_or_else(|| RuntimeError::UndefinedVariable {
+                name: name.lexeme.to_string(),
+            })
     }
 }
 
@@ -72,10 +74,16 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 write!(self.streams.output, "{}", &value).map_err(|_| RuntimeError::PrintFailed)?;
                 value
             }
-            Stmt::Var { name, initializer } => self.environment.define(
-                name.lexeme,
-                initializer.map_or(Value::Nil, |i| self.evaluate(i)),
-            ),
+            Stmt::Var { name, initializer } => {
+                let ival = if let Some(init) = initializer {
+                    self.evaluate(init)?
+                } else {
+                    Cow::Owned(Value::Nil)
+                };
+
+                self.environment.define(name.lexeme.into(), ival);
+                Cow::Owned(Value::Nil)
+            }
         };
         Ok(Cow::Owned(Value::Nil))
     }
@@ -85,10 +93,11 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             Expr::Literal { value: token } => Cow::Owned(Value::from(&token.typ)),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
-                let right = self.evaluate(right)?.as_ref();
+                let eval_right = self.evaluate(right)?;
+                let r = eval_right.as_ref();
 
                 Cow::Owned(match op.typ {
-                    TokenType::Minus => match right {
+                    TokenType::Minus => match r {
                         Value::Number(value) => Value::Number(-value),
                         _ => {
                             return Err(RuntimeError::Unimplemented {
@@ -96,15 +105,15 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                             })
                         }
                     },
-                    TokenType::Bang => Value::Boolean(!right.is_truthy()),
+                    TokenType::Bang => Value::Boolean(!r.is_truthy()),
                     _ => unreachable!("Unary operator not implemented: {:?}", op),
                 })
             }
             Expr::Binary { left, op, right } => {
-                let left = self.evaluate(left)?.as_ref();
-                let right = self.evaluate(right)?.as_ref();
+                let eval_left = self.evaluate(left)?;
+                let eval_right = self.evaluate(right)?;
 
-                let result = match (left, op.typ, right) {
+                let result = match (eval_left.as_ref(), op.typ, eval_right.as_ref()) {
                     (Value::Number(l), TokenType::Plus, Value::Number(r)) => Value::Number(l + r),
                     (Value::Number(l), TokenType::Minus, Value::Number(r)) => Value::Number(l - r),
                     (Value::Number(l), TokenType::Star, Value::Number(r)) => Value::Number(l * r),
@@ -127,12 +136,7 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     // TODO: more specific errors!
                     (l, o, r) => {
                         return Err(RuntimeError::Unimplemented {
-                            msg: format!(
-                                "Binary operation not implemented: {} {} {}",
-                                l.as_ref(),
-                                o,
-                                r.as_ref()
-                            ),
+                            msg: format!("Binary operation not implemented: {l} {o} {r}"),
                         })
                     }
                 };
@@ -146,6 +150,8 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use rstest::rstest;
 
     use crate::{
@@ -159,38 +165,38 @@ mod tests {
     };
 
     #[rstest]
-    #[case("1;", Ok(Value::Number(1.0)))]
-    #[case("\"foo\";", Ok(Value::String("foo")))]
-    #[case("true;", Ok(Value::Boolean(true)))]
-    #[case("false;", Ok(Value::Boolean(false)))]
-    #[case("nil;", Ok(Value::Nil))]
-    #[case("!true;", Ok(Value::Boolean(false)))]
-    #[case("!false;", Ok(Value::Boolean(true)))]
-    #[case("!1;", Ok(Value::Boolean(false)))]
-    #[case("!\"foo\";", Ok(Value::Boolean(false)))]
-    #[case("!nil;", Ok(Value::Boolean(true)))]
-    #[case("1 + 2;", Ok(Value::Number(3.0)))]
-    #[case("1 - 2;", Ok(Value::Number(-1.0)))]
-    #[case("1 / 2;", Ok(Value::Number(0.5)))]
-    #[case("2 * 2;", Ok(Value::Number(4.0)))]
-    #[case("1 / 0;", Ok(Value::Number(f64::INFINITY)))]
-    #[case("2 == 2;", Ok(Value::Boolean(true)))]
-    #[case("2 != 2;", Ok(Value::Boolean(false)))]
-    #[case("1 == 2;", Ok(Value::Boolean(false)))]
-    #[case("1 != 2;", Ok(Value::Boolean(true)))]
-    #[case("1 <= 2;", Ok(Value::Boolean(true)))]
-    #[case("2 <= 2;", Ok(Value::Boolean(true)))]
-    #[case("3 <= 2;", Ok(Value::Boolean(false)))]
-    #[case("1 < 2;", Ok(Value::Boolean(true)))]
-    #[case("2 < 2;", Ok(Value::Boolean(false)))]
-    #[case("3 < 2;", Ok(Value::Boolean(false)))]
-    #[case("1 >= 2;", Ok(Value::Boolean(false)))]
-    #[case("2 >= 2;", Ok(Value::Boolean(true)))]
-    #[case("3 >= 2;", Ok(Value::Boolean(true)))]
-    #[case("1 > 2;", Ok(Value::Boolean(false)))]
-    #[case("2 > 2;", Ok(Value::Boolean(false)))]
-    #[case("3 > 2;", Ok(Value::Boolean(true)))]
-    #[case("\"foo\" + \"bar\";", Ok(Value::String("foobar".into())))]
+    #[case("1;", Ok(Cow::Owned(Value::Number(1.0))))]
+    #[case("\"foo\";", Ok(Cow::Owned(Value::String("foo".into()))))]
+    #[case("true;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("false;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("nil;", Ok(Cow::Owned(Value::Nil)))]
+    #[case("!true;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("!false;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("!1;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("!\"foo\";", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("!nil;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("1 + 2;", Ok(Cow::Owned(Value::Number(3.0))))]
+    #[case("1 - 2;", Ok(Cow::Owned(Value::Number(-1.0))))]
+    #[case("1 / 2;", Ok(Cow::Owned(Value::Number(0.5))))]
+    #[case("2 * 2;", Ok(Cow::Owned(Value::Number(4.0))))]
+    #[case("1 / 0;", Ok(Cow::Owned(Value::Number(f64::INFINITY))))]
+    #[case("2 == 2;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("2 != 2;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("1 == 2;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("1 != 2;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("1 <= 2;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("2 <= 2;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("3 <= 2;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("1 < 2;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("2 < 2;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("3 < 2;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("1 >= 2;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("2 >= 2;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("3 >= 2;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("1 > 2;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("2 > 2;", Ok(Cow::Owned(Value::Boolean(false))))]
+    #[case("3 > 2;", Ok(Cow::Owned(Value::Boolean(true))))]
+    #[case("\"foo\" + \"bar\";", Ok(Cow::Owned(Value::String("foobar".into()))))]
     #[case("\"foo\" + 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String + Number".into() }
     ))]
     #[case("1 + \"foo\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + String".into() }
@@ -209,7 +215,7 @@ mod tests {
     ))]
     #[case("\"foo\" > nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Nil".into() }
     ))]
-    fn test_evaluate(#[case] source: &str, #[case] expected: EvaluationResult) {
+    fn test_evaluate<'s>(#[case] source: &'s str, #[case] expected: EvaluationResult<'s>) {
         let mut streams = Streams::test();
         let mut interpreter = Interpreter::new(&mut streams);
         let tokens: Vec<Token> = scan(source).try_collect().expect("Failed to scan tokens");
