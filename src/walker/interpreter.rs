@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     shared::{
-        errors::{EvaluationResult, RuntimeError},
+        errors::{EvaluationResult, InterpretResult, RuntimeError},
         scanner::{Token, TokenType},
         streams::Streams,
         values::Value,
@@ -16,11 +16,11 @@ use crate::{
 
 #[derive(Debug)]
 struct Environment<'s> {
-    values: HashMap<Cow<'s, str>, Cow<'s, Value<'s>>>,
+    values: HashMap<Cow<'s, str>, Value<'s>>,
 }
 
 impl<'s> Environment<'s> {
-    fn define(&mut self, name: Cow<'s, str>, value: Cow<'s, Value<'s>>) {
+    fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
         self.values.insert(name, value);
     }
 
@@ -56,17 +56,15 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
         }
     }
 
-    pub fn interpret<'s>(&mut self, statements: &'s [Stmt<'s>]) -> EvaluationResult<'s> {
+    pub fn interpret(&mut self, statements: &'s [Stmt<'s>]) -> InterpretResult {
         for stmt in statements {
             self.execute(stmt)?;
         }
 
-        // TODO: Not really supposed to return anything but maybe it doesn't matter?
-        // I guess that's what an expression oriented language is for!
-        Ok(Cow::Owned(Value::Nil))
+        Ok(())
     }
 
-    pub fn execute<'s>(&mut self, stmt: &'s Stmt<'s>) -> EvaluationResult<'s> {
+    pub fn execute(&mut self, stmt: &'s Stmt<'s>) -> InterpretResult {
         match stmt {
             Stmt::Expression { expr } => self.evaluate(expr)?,
             Stmt::Print { expr } => {
@@ -78,25 +76,26 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let ival = if let Some(init) = initializer {
                     self.evaluate(init)?
                 } else {
-                    Cow::Owned(Value::Nil)
+                    Value::Nil
                 };
 
                 self.environment.define(name.lexeme.into(), ival);
-                Cow::Owned(Value::Nil)
+                Value::Nil
             }
         };
-        Ok(Cow::Owned(Value::Nil))
+
+        Ok(())
     }
 
-    pub fn evaluate<'s>(&mut self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
+    pub fn evaluate(&mut self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
-            Expr::Literal { value: token } => Cow::Owned(Value::from(&token.typ)),
+            Expr::Literal { value: token } => Value::from(&token.typ),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
                 let eval_right = self.evaluate(right)?;
-                let r = eval_right.as_ref();
+                let r = eval_right;
 
-                Cow::Owned(match op.typ {
+                match op.typ {
                     TokenType::Minus => match r {
                         Value::Number(value) => Value::Number(-value),
                         _ => {
@@ -107,13 +106,13 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     },
                     TokenType::Bang => Value::Boolean(!r.is_truthy()),
                     _ => unreachable!("Unary operator not implemented: {:?}", op),
-                })
+                }
             }
             Expr::Binary { left, op, right } => {
                 let eval_left = self.evaluate(left)?;
                 let eval_right = self.evaluate(right)?;
 
-                let result = match (eval_left.as_ref(), op.typ, eval_right.as_ref()) {
+                let result = match (eval_left, op.typ, eval_right) {
                     (Value::Number(l), TokenType::Plus, Value::Number(r)) => Value::Number(l + r),
                     (Value::Number(l), TokenType::Minus, Value::Number(r)) => Value::Number(l - r),
                     (Value::Number(l), TokenType::Star, Value::Number(r)) => Value::Number(l * r),
@@ -141,7 +140,7 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     }
                 };
 
-                Cow::Owned(result)
+                result
             }
             Expr::Variable { name } => self.environment.get(name)?,
         })
@@ -150,8 +149,6 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
-
     use rstest::rstest;
 
     use crate::{
@@ -165,38 +162,38 @@ mod tests {
     };
 
     #[rstest]
-    #[case("1;", Ok(Cow::Owned(Value::Number(1.0))))]
-    #[case("\"foo\";", Ok(Cow::Owned(Value::String("foo".into()))))]
-    #[case("true;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("false;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("nil;", Ok(Cow::Owned(Value::Nil)))]
-    #[case("!true;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("!false;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("!1;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("!\"foo\";", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("!nil;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("1 + 2;", Ok(Cow::Owned(Value::Number(3.0))))]
-    #[case("1 - 2;", Ok(Cow::Owned(Value::Number(-1.0))))]
-    #[case("1 / 2;", Ok(Cow::Owned(Value::Number(0.5))))]
-    #[case("2 * 2;", Ok(Cow::Owned(Value::Number(4.0))))]
-    #[case("1 / 0;", Ok(Cow::Owned(Value::Number(f64::INFINITY))))]
-    #[case("2 == 2;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("2 != 2;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("1 == 2;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("1 != 2;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("1 <= 2;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("2 <= 2;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("3 <= 2;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("1 < 2;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("2 < 2;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("3 < 2;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("1 >= 2;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("2 >= 2;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("3 >= 2;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("1 > 2;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("2 > 2;", Ok(Cow::Owned(Value::Boolean(false))))]
-    #[case("3 > 2;", Ok(Cow::Owned(Value::Boolean(true))))]
-    #[case("\"foo\" + \"bar\";", Ok(Cow::Owned(Value::String("foobar".into()))))]
+    #[case("1;", Ok(Value::Number(1.0)))]
+    #[case("\"foo\";", Ok(Value::String("foo".into())))]
+    #[case("true;", Ok(Value::Boolean(true)))]
+    #[case("false;", Ok(Value::Boolean(false)))]
+    #[case("nil;", Ok(Value::Nil))]
+    #[case("!true;", Ok(Value::Boolean(false)))]
+    #[case("!false;", Ok(Value::Boolean(true)))]
+    #[case("!1;", Ok(Value::Boolean(false)))]
+    #[case("!\"foo\";", Ok(Value::Boolean(false)))]
+    #[case("!nil;", Ok(Value::Boolean(true)))]
+    #[case("1 + 2;", Ok(Value::Number(3.0)))]
+    #[case("1 - 2;", Ok(Value::Number(-1.0)))]
+    #[case("1 / 2;", Ok(Value::Number(0.5)))]
+    #[case("2 * 2;", Ok(Value::Number(4.0)))]
+    #[case("1 / 0;", Ok(Value::Number(f64::INFINITY)))]
+    #[case("2 == 2;", Ok(Value::Boolean(true)))]
+    #[case("2 != 2;", Ok(Value::Boolean(false)))]
+    #[case("1 == 2;", Ok(Value::Boolean(false)))]
+    #[case("1 != 2;", Ok(Value::Boolean(true)))]
+    #[case("1 <= 2;", Ok(Value::Boolean(true)))]
+    #[case("2 <= 2;", Ok(Value::Boolean(true)))]
+    #[case("3 <= 2;", Ok(Value::Boolean(false)))]
+    #[case("1 < 2;", Ok(Value::Boolean(true)))]
+    #[case("2 < 2;", Ok(Value::Boolean(false)))]
+    #[case("3 < 2;", Ok(Value::Boolean(false)))]
+    #[case("1 >= 2;", Ok(Value::Boolean(false)))]
+    #[case("2 >= 2;", Ok(Value::Boolean(true)))]
+    #[case("3 >= 2;", Ok(Value::Boolean(true)))]
+    #[case("1 > 2;", Ok(Value::Boolean(false)))]
+    #[case("2 > 2;", Ok(Value::Boolean(false)))]
+    #[case("3 > 2;", Ok(Value::Boolean(true)))]
+    #[case("\"foo\" + \"bar\";", Ok(Value::String("foobar".into())))]
     #[case("\"foo\" + 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String + Number".into() }
     ))]
     #[case("1 + \"foo\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + String".into() }

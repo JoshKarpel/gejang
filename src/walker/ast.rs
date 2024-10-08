@@ -77,9 +77,9 @@ impl Display for Stmt<'_> {
                 }
                 Stmt::Var { name, initializer } => {
                     if let Some(init) = initializer {
-                        format!("(var {name} {init})")
+                        format!("(var {} {init})", name.lexeme)
                     } else {
-                        format!("(var {name})")
+                        format!("(var {})", name.lexeme)
                     }
                 }
             }

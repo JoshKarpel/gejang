@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use thiserror::Error;
 
 use crate::shared::values::Value;
@@ -16,4 +14,5 @@ pub enum RuntimeError {
     UndefinedVariable { name: String },
 }
 
-pub type EvaluationResult<'s> = Result<Cow<'s, Value<'s>>, RuntimeError>;
+pub type InterpretResult = Result<(), RuntimeError>;
+pub type EvaluationResult<'s> = Result<Value<'s>, RuntimeError>;
