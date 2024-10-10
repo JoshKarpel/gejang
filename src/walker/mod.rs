@@ -2,7 +2,10 @@ mod ast;
 mod interpreter;
 mod parser;
 
-use std::io::{Read, Write};
+use std::{
+    cell::RefCell,
+    io::{Read, Write},
+};
 
 use anyhow::Result;
 use colored::Colorize;
@@ -15,7 +18,7 @@ use crate::{
 };
 
 pub fn exec(source: &str) -> Result<()> {
-    interpret(source, &mut Streams::new())?;
+    interpret(source, &RefCell::new(Streams::new()))?;
 
     Ok(())
 }
@@ -27,15 +30,20 @@ pub fn repl() -> Result<()> {
     let bad_prefix = "😵> ";
     let mut error = false;
 
-    let mut streams = Streams::new();
+    let streams = RefCell::new(Streams::new());
 
     loop {
-        print!("{}", if !error { prefix } else { bad_prefix });
-        streams.output.flush()?;
-        let mut buffer = String::new();
-        streams.input.read_line(&mut buffer)?;
+        write!(
+            streams.borrow_mut().output,
+            "{}",
+            if !error { prefix } else { bad_prefix }
+        )?;
+        streams.borrow_mut().output.flush()?;
 
-        match interpret(&buffer, &mut streams) {
+        let mut buffer = String::new();
+        streams.borrow_mut().input.read_line(&mut buffer)?;
+
+        match interpret(&buffer, &streams) {
             Ok(_) => error = false,
             Err(_) => error = true,
         }
@@ -56,13 +64,13 @@ pub enum InterpreterError {
 
 fn interpret<I: Read, O: Write, E: Write>(
     source: &str,
-    streams: &mut Streams<I, O, E>,
+    streams: &RefCell<Streams<I, O, E>>,
 ) -> Result<(), InterpreterError> {
     let (tokens, errors): (Vec<_>, Vec<_>) = scanner::scan(source).partition_result();
 
     if !errors.is_empty() {
         for e in errors {
-            write!(streams.error, "{}", e.to_string().red())
+            write!(streams.borrow_mut().error, "{}", e.to_string().red())
                 .map_err(|_| InterpreterError::Internal)?;
         }
         return Err(InterpreterError::Scanner);
@@ -73,16 +81,16 @@ fn interpret<I: Read, O: Write, E: Write>(
 
     if !errors.is_empty() {
         for e in errors {
-            write!(streams.error, "{}", e.to_string().red())
+            write!(streams.borrow_mut().error, "{}", e.to_string().red())
                 .map_err(|_| InterpreterError::Internal)?;
         }
         return Err(InterpreterError::Parser);
     }
 
-    let mut interpreter = Interpreter::new(streams);
+    let interpreter = Interpreter::new(streams);
 
     interpreter.interpret(&statements).map_err(|e| {
-        if write!(streams.error, "{}", e.to_string().red()).is_err() {
+        if write!(streams.borrow_mut().error, "{}", e.to_string().red()).is_err() {
             InterpreterError::Internal
         } else {
             InterpreterError::Evaluation
@@ -104,8 +112,8 @@ mod tests {
     #[case("var foo = \"bar\"; print foo;", "bar")]
     #[case("var foo = 1 + 2 * 6; print foo;", "13")]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
-        let mut streams = Streams::test();
-        interpret(source, &mut streams).unwrap();
-        assert_eq!(String::from_utf8(streams.output).unwrap(), expected);
+        let streams = RefCell::new(Streams::test());
+        interpret(source, &streams).unwrap();
+        assert_eq!(streams.borrow().get_output().unwrap(), expected);
     }
 }

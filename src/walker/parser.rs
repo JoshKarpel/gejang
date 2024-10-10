@@ -124,14 +124,17 @@ where
             .tokens
             .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
         {
-            let initializer =
-                if let Some(_) = self.tokens.next_if(|t| matches!(t.typ, TokenType::Equal)) {
-                    Some(Box::new(self.expression()?))
-                } else {
-                    None
-                };
+            let initializer = if self
+                .tokens
+                .next_if(|t| matches!(t.typ, TokenType::Equal))
+                .is_some()
+            {
+                Some(Box::new(self.expression()?))
+            } else {
+                None
+            };
 
-            self.require_semicolon();
+            self.require_semicolon()?;
 
             Ok(Stmt::Var { name, initializer })
         } else {

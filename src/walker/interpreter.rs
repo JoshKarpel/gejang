@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    cell::RefCell,
     collections::HashMap,
     io::{Read, Write},
 };
@@ -14,7 +15,7 @@ use crate::{
     walker::ast::{Expr, Stmt},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Environment<'s> {
     values: HashMap<Cow<'s, str>, Value<'s>>,
 }
@@ -24,39 +25,31 @@ impl<'s> Environment<'s> {
         self.values.insert(name, value);
     }
 
-    fn get(&mut self, name: &Token<'s>) -> EvaluationResult {
+    fn get(&self, name: &Token<'s>) -> EvaluationResult<'s> {
         self.values
             .get(name.lexeme)
-            .map(|v| v.clone()) // TODO: no! We need to be able to mutate objects
+            .cloned() // TODO: clone means we can't mutate objects!
             .ok_or_else(|| RuntimeError::UndefinedVariable {
                 name: name.lexeme.to_string(),
             })
     }
 }
 
-impl<'s> Default for Environment<'s> {
-    fn default() -> Self {
-        Self {
-            values: HashMap::new(),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Interpreter<'s, 'io, I: Read, O: Write, E: Write> {
-    environment: Environment<'s>,
-    streams: &'io mut Streams<I, O, E>,
+    environment: RefCell<Environment<'s>>,
+    streams: &'io RefCell<Streams<I, O, E>>,
 }
 
-impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
-    pub fn new(streams: &'io mut Streams<I, O, E>) -> Self {
+impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
+    pub fn new(streams: &'io RefCell<Streams<I, O, E>>) -> Self {
         Self {
-            environment: Environment::default(),
+            environment: RefCell::new(Environment::default()),
             streams,
         }
     }
 
-    pub fn interpret(&mut self, statements: &'s [Stmt<'s>]) -> InterpretResult {
+    pub fn interpret(&'s self, statements: &'s [Stmt<'s>]) -> InterpretResult {
         for stmt in statements {
             self.execute(stmt)?;
         }
@@ -64,12 +57,13 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
         Ok(())
     }
 
-    pub fn execute(&mut self, stmt: &'s Stmt<'s>) -> InterpretResult {
+    pub fn execute(&'s self, stmt: &'s Stmt<'s>) -> InterpretResult {
         match stmt {
             Stmt::Expression { expr } => self.evaluate(expr)?,
             Stmt::Print { expr } => {
                 let value = self.evaluate(expr)?;
-                write!(self.streams.output, "{}", &value).map_err(|_| RuntimeError::PrintFailed)?;
+                write!(self.streams.borrow_mut().output, "{}", &value)
+                    .map_err(|_| RuntimeError::PrintFailed)?;
                 value
             }
             Stmt::Var { name, initializer } => {
@@ -79,7 +73,9 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     Value::Nil
                 };
 
-                self.environment.define(name.lexeme.into(), ival);
+                self.environment
+                    .borrow_mut()
+                    .define(name.lexeme.into(), ival);
                 Value::Nil
             }
         };
@@ -87,16 +83,15 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
         Ok(())
     }
 
-    pub fn evaluate(&mut self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
+    pub fn evaluate(&'s self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
             Expr::Literal { value: token } => Value::from(&token.typ),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
                 let eval_right = self.evaluate(right)?;
-                let r = eval_right;
 
                 match op.typ {
-                    TokenType::Minus => match r {
+                    TokenType::Minus => match eval_right {
                         Value::Number(value) => Value::Number(-value),
                         _ => {
                             return Err(RuntimeError::Unimplemented {
@@ -104,7 +99,7 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                             })
                         }
                     },
-                    TokenType::Bang => Value::Boolean(!r.is_truthy()),
+                    TokenType::Bang => Value::Boolean(!eval_right.is_truthy()),
                     _ => unreachable!("Unary operator not implemented: {:?}", op),
                 }
             }
@@ -112,7 +107,7 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let eval_left = self.evaluate(left)?;
                 let eval_right = self.evaluate(right)?;
 
-                let result = match (eval_left, op.typ, eval_right) {
+                match (eval_left, op.typ, eval_right) {
                     (Value::Number(l), TokenType::Plus, Value::Number(r)) => Value::Number(l + r),
                     (Value::Number(l), TokenType::Minus, Value::Number(r)) => Value::Number(l - r),
                     (Value::Number(l), TokenType::Star, Value::Number(r)) => Value::Number(l * r),
@@ -128,27 +123,31 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                         Value::Boolean(l <= r)
                     }
                     (Value::String(ref l), TokenType::Plus, Value::String(ref r)) => {
-                        Value::String(Cow::from(format!("{}{}", l, r)))
+                        Value::String(Cow::from(format!("{l}{r}")))
                     }
                     (l, TokenType::EqualEqual, r) => Value::Boolean(l == r),
                     (l, TokenType::BangEqual, r) => Value::Boolean(l != r),
                     // TODO: more specific errors!
                     (l, o, r) => {
                         return Err(RuntimeError::Unimplemented {
-                            msg: format!("Binary operation not implemented: {l} {o} {r}"),
+                            msg: format!(
+                                "Binary operation not implemented: {} {o} {}",
+                                l.as_ref(),
+                                r.as_ref()
+                            ),
                         })
                     }
-                };
-
-                result
+                }
             }
-            Expr::Variable { name } => self.environment.get(name)?,
+            Expr::Variable { name } => self.environment.borrow().get(name)?,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use rstest::rstest;
 
     use crate::{
@@ -213,8 +212,8 @@ mod tests {
     #[case("\"foo\" > nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Nil".into() }
     ))]
     fn test_evaluate<'s>(#[case] source: &'s str, #[case] expected: EvaluationResult<'s>) {
-        let mut streams = Streams::test();
-        let mut interpreter = Interpreter::new(&mut streams);
+        let streams = RefCell::new(Streams::test());
+        let interpreter = Interpreter::new(&streams);
         let tokens: Vec<Token> = scan(source).try_collect().expect("Failed to scan tokens");
         let stmt = parse(tokens.iter())
             .pop()
