@@ -33,7 +33,7 @@ pub fn repl() -> Result<()> {
     let streams = RefCell::new(Streams::new());
 
     loop {
-        write!(
+        writeln!(
             streams.borrow_mut().output,
             "{}",
             if !error { prefix } else { bad_prefix }
@@ -70,7 +70,7 @@ fn interpret<I: Read, O: Write, E: Write>(
 
     if !errors.is_empty() {
         for e in errors {
-            write!(streams.borrow_mut().error, "{}", e.to_string().red())
+            writeln!(streams.borrow_mut().error, "{}", e.to_string().red())
                 .map_err(|_| InterpreterError::Internal)?;
         }
         return Err(InterpreterError::Scanner);
@@ -81,7 +81,7 @@ fn interpret<I: Read, O: Write, E: Write>(
 
     if !errors.is_empty() {
         for e in errors {
-            write!(streams.borrow_mut().error, "{}", e.to_string().red())
+            writeln!(streams.borrow_mut().error, "{}", e.to_string().red())
                 .map_err(|_| InterpreterError::Internal)?;
         }
         return Err(InterpreterError::Parser);
@@ -90,7 +90,7 @@ fn interpret<I: Read, O: Write, E: Write>(
     let interpreter = Interpreter::new(streams);
 
     interpreter.interpret(&statements).map_err(|e| {
-        if write!(streams.borrow_mut().error, "{}", e.to_string().red()).is_err() {
+        if writeln!(streams.borrow_mut().error, "{}", e.to_string().red()).is_err() {
             InterpreterError::Internal
         } else {
             InterpreterError::Evaluation
