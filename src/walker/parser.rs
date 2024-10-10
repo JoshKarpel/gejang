@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::{
     shared::scanner::{Token, TokenType},
-    walker::ast::Expr,
+    walker::ast::{Expr, Stmt},
 };
 
 #[derive(Error, Clone, PartialEq, PartialOrd, Debug)]
@@ -18,7 +18,8 @@ pub enum ParserError<'s> {
     UnexpectedEndOfInput,
 }
 
-type ParserResult<'s> = Result<Expr<'s>, ParserError<'s>>;
+type ParserExprResult<'s> = Result<Expr<'s>, ParserError<'s>>;
+type ParserStmtResult<'s> = Result<Stmt<'s>, ParserError<'s>>;
 
 /*
 Trying to write this the way the book wants doesn't work
@@ -97,11 +98,107 @@ where
         }
     }
 
-    fn expression(&mut self) -> ParserResult<'s> {
+    fn parse(&mut self) -> Vec<ParserStmtResult<'s>> {
+        let mut statements = Vec::new();
+        while self.tokens.peek().is_some() {
+            statements.push(self.declaration());
+        }
+        statements
+    }
+
+    fn declaration(&mut self) -> ParserStmtResult<'s> {
+        (if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Var))
+            .is_some()
+        {
+            self.variable_declaration()
+        } else {
+            self.statement()
+        })
+        .inspect_err(|_| self.synchronize())
+    }
+
+    fn variable_declaration(&mut self) -> ParserStmtResult<'s> {
+        if let Some(name) = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+        {
+            let initializer = if self
+                .tokens
+                .next_if(|t| matches!(t.typ, TokenType::Equal))
+                .is_some()
+            {
+                Some(Box::new(self.expression()?))
+            } else {
+                None
+            };
+
+            self.require_semicolon()?;
+
+            Ok(Stmt::Var { name, initializer })
+        } else {
+            Err(self
+                .tokens
+                .peek()
+                .map_or(ParserError::UnexpectedEndOfInput, |token| {
+                    ParserError::UnexpectedToken {
+                        expected: TokenType::Semicolon,
+                        token,
+                    }
+                }))
+        }
+    }
+
+    fn statement(&mut self) -> ParserStmtResult<'s> {
+        // TODO: can we avoid matching twice?
+        if let Some(token) = self.tokens.next_if(|t| matches!(t.typ, TokenType::Print)) {
+            match token.typ {
+                TokenType::Print => self.print_statement(),
+                _ => unreachable!("Unimplemented statement type"),
+            }
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> ParserStmtResult<'s> {
+        let expr = self.expression()?;
+        self.require_semicolon()?;
+        Ok(Stmt::Print {
+            expr: Box::new(expr),
+        })
+    }
+
+    fn expression_statement(&mut self) -> ParserStmtResult<'s> {
+        let expr = self.expression()?;
+        self.require_semicolon()?;
+        Ok(Stmt::Expression {
+            expr: Box::new(expr),
+        })
+    }
+
+    fn require_semicolon(&mut self) -> Result<(), ParserError<'s>> {
+        self.tokens
+            .next_if(|t| matches!(t.typ, TokenType::Semicolon))
+            .ok_or_else(|| {
+                self.tokens
+                    .peek()
+                    .map_or(ParserError::UnexpectedEndOfInput, |token| {
+                        ParserError::UnexpectedToken {
+                            expected: TokenType::Semicolon,
+                            token,
+                        }
+                    })
+            })
+            .map(|_| ())
+    }
+
+    fn expression(&mut self) -> ParserExprResult<'s> {
         self.equality()
     }
 
-    fn equality(&mut self) -> ParserResult<'s> {
+    fn equality(&mut self) -> ParserExprResult<'s> {
         let mut expr = self.comparison()?;
 
         while let Some(operator) = self
@@ -119,7 +216,7 @@ where
         Ok(expr)
     }
 
-    fn comparison(&mut self) -> ParserResult<'s> {
+    fn comparison(&mut self) -> ParserExprResult<'s> {
         let mut expr = self.term()?;
 
         while let Some(operator) = self.tokens.next_if(|t| {
@@ -142,7 +239,7 @@ where
         Ok(expr)
     }
 
-    fn term(&mut self) -> ParserResult<'s> {
+    fn term(&mut self) -> ParserExprResult<'s> {
         let mut expr = self.factor()?;
 
         while let Some(operator) = self
@@ -160,7 +257,7 @@ where
         Ok(expr)
     }
 
-    fn factor(&mut self) -> ParserResult<'s> {
+    fn factor(&mut self) -> ParserExprResult<'s> {
         let mut expr = self.unary()?;
 
         while let Some(operator) = self
@@ -178,7 +275,7 @@ where
         Ok(expr)
     }
 
-    fn unary(&mut self) -> ParserResult<'s> {
+    fn unary(&mut self) -> ParserExprResult<'s> {
         if let Some(operator) = self
             .tokens
             .next_if(|t| matches!(t.typ, TokenType::Bang | TokenType::Minus))
@@ -193,14 +290,14 @@ where
         self.primary()
     }
 
-    fn primary(&mut self) -> ParserResult<'s> {
+    fn primary(&mut self) -> ParserExprResult<'s> {
         if let Some(token) = self.tokens.next() {
             Ok(match token.typ {
-                TokenType::False => Expr::Literal { token },
-                TokenType::True => Expr::Literal { token },
-                TokenType::Nil => Expr::Literal { token },
-                TokenType::Number(_) => Expr::Literal { token },
-                TokenType::String(_) => Expr::Literal { token },
+                TokenType::False => Expr::Literal { value: token },
+                TokenType::True => Expr::Literal { value: token },
+                TokenType::Nil => Expr::Literal { value: token },
+                TokenType::Number(_) => Expr::Literal { value: token },
+                TokenType::String(_) => Expr::Literal { value: token },
                 TokenType::LeftParen => {
                     let expr = self.expression()?;
                     self.tokens
@@ -219,6 +316,7 @@ where
                         expr: Box::new(expr),
                     }
                 }
+                TokenType::Identifier(_) => Expr::Variable { name: token },
                 _ => {
                     return Err(ParserError::UnexpectedToken {
                         expected: TokenType::Identifier(""), // TODO: What should this be?
@@ -232,12 +330,13 @@ where
     }
 }
 
-pub fn parse<'s, I>(tokens: I) -> ParserResult<'s>
+pub fn parse<'s, I>(tokens: I) -> Vec<ParserStmtResult<'s>>
+// TODO: return an iterator instead of a Vec?
 where
     I: IntoIterator<Item = &'s Token<'s>>, // TODO: Iterator or IntoIterator?
 {
     let mut parser = Parser::from(tokens.into_iter());
-    parser.expression()
+    parser.parse()
 }
 
 #[cfg(test)]
@@ -251,7 +350,7 @@ mod tests {
     #[rstest]
     #[case("1 + 2", Ok(Expr::Binary {
         left: Box::new(Expr::Literal {
-            token: &Token {
+            value: &Token {
                 typ: TokenType::Number(1.0),
                 lexeme: "1",
                 line: 0,
@@ -265,7 +364,7 @@ mod tests {
 
         },
         right: Box::new(Expr::Literal {
-            token: &Token {
+            value: &Token {
                 typ: TokenType::Number(2.0),
                 lexeme: "2",
                 line: 0,
@@ -276,7 +375,7 @@ mod tests {
     #[case("(1 + 2)", Ok(Expr::Grouping {
         expr: Box::new(Expr::Binary {
             left: Box::new(Expr::Literal {
-                token: &Token {
+                value: &Token {
                     typ: TokenType::Number(1.0),
                     lexeme: "1",
                     line: 0,
@@ -288,7 +387,7 @@ mod tests {
                 line: 0,
             },
             right: Box::new(Expr::Literal {
-                token: &Token {
+                value: &Token {
                     typ: TokenType::Number(2.0),
                     lexeme: "2",
                     line: 0,
@@ -305,9 +404,10 @@ mod tests {
             line: 0,
         },
     }))]
-    fn test_parse(#[case] source: &str, #[case] expected: ParserResult) {
+    fn test_parse(#[case] source: &str, #[case] expected: ParserExprResult) {
         let tokens: Vec<Token> = scan(source).try_collect().unwrap();
-        assert_eq!(parse(tokens.iter()), expected);
+        let mut parser = Parser::from(tokens.iter());
+        assert_eq!(parser.expression(), expected);
     }
 
     #[rstest]

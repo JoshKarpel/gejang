@@ -3,14 +3,14 @@ flows:
     envs:
       CARGO_TERM_COLOR: always
     nodes:
-      tests:
-        target: tests
-        triggers:
-          - code-changes
       clippy:
         target: clippy
         triggers:
           - code-changes
+      tests:
+        target: tests
+        triggers:
+          - after: [clippy]
 
 targets:
   tests:
