@@ -8,6 +8,11 @@ pub enum RuntimeError {
     Unimplemented { msg: String },
     #[error("Invalid instruction pointer: {ip}")]
     InvalidInstructionPointer { ip: usize },
+    #[error("Print failed")]
+    PrintFailed,
+    #[error("Undefined variable {name}")]
+    UndefinedVariable { name: String },
 }
 
+pub type InterpretResult = Result<(), RuntimeError>;
 pub type EvaluationResult<'s> = Result<Value<'s>, RuntimeError>;

@@ -1,4 +1,4 @@
-use std::{io, io::Write, path::Path};
+use std::{io, io::Write};
 
 use anyhow::Result;
 use colored::Colorize;
@@ -14,10 +14,8 @@ mod compiler;
 mod ops;
 mod virtual_machine;
 
-pub fn script(path: &Path) -> Result<()> {
-    let source = std::fs::read_to_string(path)?;
-
-    interpret(&source)?;
+pub fn exec(source: &str) -> Result<()> {
+    interpret(source)?;
 
     Ok(())
 }
@@ -53,7 +51,7 @@ fn interpret(source: &str) -> Result<(), InterpreterError> {
 
     let mut chunk = compiler::compile(tokens.iter()).map_err(|e| {
         eprintln!("{}", e.to_string().red());
-        InterpreterError::Compiler
+        InterpreterError::Evaluation
     })?;
 
     chunk.write(OpCode::Return, 0); // TODO: Remove this

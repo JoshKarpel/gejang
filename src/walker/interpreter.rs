@@ -1,31 +1,124 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    cell::RefCell,
+    collections::HashMap,
+    io::{Read, Write},
+};
 
 use crate::{
     shared::{
-        errors::{EvaluationResult, RuntimeError},
-        scanner::TokenType,
+        errors::{EvaluationResult, InterpretResult, RuntimeError},
+        scanner::{Token, TokenType},
+        streams::Streams,
         values::Value,
     },
-    walker::ast::Expr,
+    walker::ast::{Expr, Stmt},
 };
 
-#[derive(Debug)]
-pub struct Interpreter {}
+#[derive(Debug, Default)]
+struct Environment<'s> {
+    values: HashMap<Cow<'s, str>, Value<'s>>,
+}
 
-impl Interpreter {
-    pub fn new() -> Self {
-        Self {}
+impl<'s> Environment<'s> {
+    fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
+        self.values.insert(name, value);
     }
 
-    pub fn evaluate<'s>(&self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
+    fn get(&self, name: &Token<'s>) -> Option<Value<'s>> {
+        self.values.get(name.lexeme).cloned() // TODO: clone means we can't mutate objects!
+    }
+}
+
+#[derive(Debug)]
+pub struct Interpreter<'s, 'io, I: Read, O: Write, E: Write> {
+    environments: RefCell<Vec<Environment<'s>>>,
+    streams: &'io RefCell<Streams<I, O, E>>,
+}
+
+impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
+    pub fn new(streams: &'io RefCell<Streams<I, O, E>>) -> Self {
+        Self {
+            environments: RefCell::new(vec![Environment::default()]),
+            streams,
+        }
+    }
+
+    fn push_env(&self) {
+        self.environments.borrow_mut().push(Environment::default());
+    }
+
+    fn pop_env(&self) {
+        self.environments.borrow_mut().pop();
+    }
+
+    fn env_define(&self, name: &Token<'s>, value: Value<'s>) {
+        self.environments
+            .borrow_mut()
+            .last_mut()
+            .expect("Unexpectedly empty environment stack!")
+            .define(name.lexeme.into(), value);
+    }
+
+    fn env_get(&self, name: &Token<'s>) -> EvaluationResult<'s> {
+        self.environments
+            .borrow()
+            .iter()
+            .rev()
+            .find_map(|e| e.get(name))
+            .ok_or_else(|| RuntimeError::UndefinedVariable {
+                name: name.lexeme.to_string(),
+            })
+    }
+
+    pub fn interpret(&'s self, statements: &'s [Stmt<'s>]) -> InterpretResult {
+        for stmt in statements {
+            self.execute(stmt)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn execute(&'s self, stmt: &'s Stmt<'s>) -> InterpretResult {
+        match stmt {
+            Stmt::Block { stmts } => {
+                self.push_env();
+                for stmt in stmts {
+                    self.execute(stmt)?
+                }
+                self.pop_env();
+            }
+            Stmt::Expression { expr } => {
+                self.evaluate(expr)?;
+            }
+            Stmt::Print { expr } => {
+                let value = self.evaluate(expr)?;
+                writeln!(self.streams.borrow_mut().output, "{}", &value)
+                    .map_err(|_| RuntimeError::PrintFailed)?;
+            }
+            Stmt::Var { name, initializer } => {
+                let ival = if let Some(init) = initializer {
+                    self.evaluate(init)?
+                } else {
+                    Value::Nil
+                };
+
+                self.env_define(name, ival);
+            }
+        };
+
+        Ok(())
+    }
+
+    pub fn evaluate(&'s self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
-            Expr::Literal { token } => Value::from(&token.typ),
+            Expr::Literal { value: token } => Value::from(&token.typ),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
-                let right = self.evaluate(right)?;
+                let eval_right = self.evaluate(right)?;
 
                 match op.typ {
-                    TokenType::Minus => match right {
+                    TokenType::Minus => match eval_right {
                         Value::Number(value) => Value::Number(-value),
                         _ => {
                             return Err(RuntimeError::Unimplemented {
@@ -33,15 +126,15 @@ impl Interpreter {
                             })
                         }
                     },
-                    TokenType::Bang => Value::Boolean(!right.is_truthy()),
+                    TokenType::Bang => Value::Boolean(!eval_right.is_truthy()),
                     _ => unreachable!("Unary operator not implemented: {:?}", op),
                 }
             }
             Expr::Binary { left, op, right } => {
-                let left = self.evaluate(left)?;
-                let right = self.evaluate(right)?;
+                let eval_left = self.evaluate(left)?;
+                let eval_right = self.evaluate(right)?;
 
-                match (left, op.typ, right) {
+                match (eval_left, op.typ, eval_right) {
                     (Value::Number(l), TokenType::Plus, Value::Number(r)) => Value::Number(l + r),
                     (Value::Number(l), TokenType::Minus, Value::Number(r)) => Value::Number(l - r),
                     (Value::Number(l), TokenType::Star, Value::Number(r)) => Value::Number(l * r),
@@ -57,7 +150,7 @@ impl Interpreter {
                         Value::Boolean(l <= r)
                     }
                     (Value::String(ref l), TokenType::Plus, Value::String(ref r)) => {
-                        Value::String(Cow::from(format!("{}{}", l, r)))
+                        Value::String(Cow::from(format!("{l}{r}")))
                     }
                     (l, TokenType::EqualEqual, r) => Value::Boolean(l == r),
                     (l, TokenType::BangEqual, r) => Value::Boolean(l != r),
@@ -65,79 +158,90 @@ impl Interpreter {
                     (l, o, r) => {
                         return Err(RuntimeError::Unimplemented {
                             msg: format!(
-                                "Binary operation not implemented: {} {} {}",
+                                "Binary operation not implemented: {} {o} {}",
                                 l.as_ref(),
-                                o,
                                 r.as_ref()
                             ),
                         })
                     }
                 }
             }
+            Expr::Variable { name } => self.env_get(name)?,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use rstest::rstest;
 
     use crate::{
         shared::{
             errors::{EvaluationResult, RuntimeError},
             scanner::{scan, Token},
+            streams::Streams,
             values::Value,
         },
-        walker::{interpreter::Interpreter, parser::parse},
+        walker::{ast::Stmt, interpreter::Interpreter, parser::parse},
     };
 
     #[rstest]
-    #[case("1", Ok(Value::Number(1.0)))]
-    #[case("\"foo\"", Ok(Value::String("foo".into())))]
-    #[case("true", Ok(Value::Boolean(true)))]
-    #[case("false", Ok(Value::Boolean(false)))]
-    #[case("nil", Ok(Value::Nil))]
-    #[case("!true", Ok(Value::Boolean(false)))]
-    #[case("!false", Ok(Value::Boolean(true)))]
-    #[case("!1", Ok(Value::Boolean(false)))]
-    #[case("!\"foo\"", Ok(Value::Boolean(false)))]
-    #[case("!nil", Ok(Value::Boolean(true)))]
-    #[case("1 + 2", Ok(Value::Number(3.0)))]
-    #[case("1 - 2", Ok(Value::Number(-1.0)))]
-    #[case("1 / 2", Ok(Value::Number(0.5)))]
-    #[case("2 * 2", Ok(Value::Number(4.0)))]
-    #[case("1 / 0", Ok(Value::Number(f64::INFINITY)))]
-    #[case("2 == 2", Ok(Value::Boolean(true)))]
-    #[case("2 != 2", Ok(Value::Boolean(false)))]
-    #[case("1 == 2", Ok(Value::Boolean(false)))]
-    #[case("1 != 2", Ok(Value::Boolean(true)))]
-    #[case("1 <= 2", Ok(Value::Boolean(true)))]
-    #[case("2 <= 2", Ok(Value::Boolean(true)))]
-    #[case("3 <= 2", Ok(Value::Boolean(false)))]
-    #[case("1 < 2", Ok(Value::Boolean(true)))]
-    #[case("2 < 2", Ok(Value::Boolean(false)))]
-    #[case("3 < 2", Ok(Value::Boolean(false)))]
-    #[case("1 >= 2", Ok(Value::Boolean(false)))]
-    #[case("2 >= 2", Ok(Value::Boolean(true)))]
-    #[case("3 >= 2", Ok(Value::Boolean(true)))]
-    #[case("1 > 2", Ok(Value::Boolean(false)))]
-    #[case("2 > 2", Ok(Value::Boolean(false)))]
-    #[case("3 > 2", Ok(Value::Boolean(true)))]
-    #[case("\"foo\" + \"bar\"", Ok(Value::String("foobar".into())))]
-    #[case("\"foo\" + 1", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String + Number".into() }))]
-    #[case("1 + \"foo\"", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + String".into() }))]
-    #[case("1 + true", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
-    #[case("1 + false", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
-    #[case("1 + nil", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Nil".into() }))]
-    #[case("\"foo\" > true", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Boolean".into() }))]
-    #[case("\"foo\" > \"bar\"", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > String".into() }))]
-    #[case("\"foo\" > 1", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Number".into() }))]
-    #[case("\"foo\" > nil", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Nil".into() }))]
-    fn test_interpreter(#[case] source: &str, #[case] expected: EvaluationResult) {
-        let interpreter = Interpreter::new();
-        let tokens: Vec<Token> = scan(source).try_collect().unwrap();
-        let expr = parse(tokens.iter()).unwrap();
-        let result = interpreter.evaluate(&expr);
-        assert_eq!(result, expected);
+    #[case("1;", Ok(Value::Number(1.0)))]
+    #[case("\"foo\";", Ok(Value::String("foo".into())))]
+    #[case("true;", Ok(Value::Boolean(true)))]
+    #[case("false;", Ok(Value::Boolean(false)))]
+    #[case("nil;", Ok(Value::Nil))]
+    #[case("!true;", Ok(Value::Boolean(false)))]
+    #[case("!false;", Ok(Value::Boolean(true)))]
+    #[case("!1;", Ok(Value::Boolean(false)))]
+    #[case("!\"foo\";", Ok(Value::Boolean(false)))]
+    #[case("!nil;", Ok(Value::Boolean(true)))]
+    #[case("1 + 2;", Ok(Value::Number(3.0)))]
+    #[case("1 - 2;", Ok(Value::Number(-1.0)))]
+    #[case("1 / 2;", Ok(Value::Number(0.5)))]
+    #[case("2 * 2;", Ok(Value::Number(4.0)))]
+    #[case("1 / 0;", Ok(Value::Number(f64::INFINITY)))]
+    #[case("2 == 2;", Ok(Value::Boolean(true)))]
+    #[case("2 != 2;", Ok(Value::Boolean(false)))]
+    #[case("1 == 2;", Ok(Value::Boolean(false)))]
+    #[case("1 != 2;", Ok(Value::Boolean(true)))]
+    #[case("1 <= 2;", Ok(Value::Boolean(true)))]
+    #[case("2 <= 2;", Ok(Value::Boolean(true)))]
+    #[case("3 <= 2;", Ok(Value::Boolean(false)))]
+    #[case("1 < 2;", Ok(Value::Boolean(true)))]
+    #[case("2 < 2;", Ok(Value::Boolean(false)))]
+    #[case("3 < 2;", Ok(Value::Boolean(false)))]
+    #[case("1 >= 2;", Ok(Value::Boolean(false)))]
+    #[case("2 >= 2;", Ok(Value::Boolean(true)))]
+    #[case("3 >= 2;", Ok(Value::Boolean(true)))]
+    #[case("1 > 2;", Ok(Value::Boolean(false)))]
+    #[case("2 > 2;", Ok(Value::Boolean(false)))]
+    #[case("3 > 2;", Ok(Value::Boolean(true)))]
+    #[case("\"foo\" + \"bar\";", Ok(Value::String("foobar".into())))]
+    #[case("\"foo\" + 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String + Number".into() }))]
+    #[case("1 + \"foo\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + String".into() }))]
+    #[case("1 + true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
+    #[case("1 + false;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
+    #[case("1 + nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Nil".into() }))]
+    #[case("\"foo\" > true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Boolean".into() }))]
+    #[case("\"foo\" > \"bar\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > String".into() }))]
+    #[case("\"foo\" > 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Number".into() }))]
+    #[case("\"foo\" > nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Nil".into() }))]
+    fn test_evaluate<'s>(#[case] source: &'s str, #[case] expected: EvaluationResult<'s>) {
+        let streams = RefCell::new(Streams::test());
+        let interpreter = Interpreter::new(&streams);
+        let tokens: Vec<Token> = scan(source).try_collect().expect("Failed to scan tokens");
+        let stmt = parse(tokens.iter())
+            .pop()
+            .expect("Expected one statement")
+            .expect("Failed to parse statement");
+        if let Stmt::Expression { expr } = stmt {
+            let result = interpreter.evaluate(&expr);
+            assert_eq!(result, expected);
+        } else {
+            panic!("Expected expression statement");
+        }
     }
 }
