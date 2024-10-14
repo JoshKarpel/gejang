@@ -21,12 +21,12 @@ impl Streams<Stdin, Stdout, Stderr> {
 }
 
 #[cfg(test)]
-impl Streams<&[u8], Vec<u8>, Vec<u8>> {
+impl Streams<&[u8], Vec<u8>, Stderr> {
     pub fn test() -> Self {
         Streams {
             input: &[],
             output: Vec::new(),
-            error: Vec::new(),
+            error: io::stderr(),
         }
     }
 

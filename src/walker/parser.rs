@@ -152,13 +152,16 @@ where
 
     fn statement(&mut self) -> ParserStmtResult<'s> {
         // TODO: can we avoid matching twice?
-        if let Some(token) = self
-            .tokens
-            .next_if(|t| matches!(t.typ, TokenType::Print | TokenType::LeftBrace))
-        {
+        if let Some(token) = self.tokens.next_if(|t| {
+            matches!(
+                t.typ,
+                TokenType::Print | TokenType::LeftBrace | TokenType::If
+            )
+        }) {
             match token.typ {
                 TokenType::Print => self.print_statement(),
                 TokenType::LeftBrace => self.block(),
+                TokenType::If => self.if_statement(),
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {
@@ -188,6 +191,28 @@ where
         self.require_token(TokenType::RightBrace)?;
 
         Ok(Stmt::Block { stmts })
+    }
+
+    fn if_statement(&mut self) -> ParserStmtResult<'s> {
+        self.require_token(TokenType::LeftParen)?;
+        let condition = Box::new(self.expression()?);
+        self.require_token(TokenType::RightParen)?;
+        let then = Box::new(self.statement()?);
+        let els = if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Else))
+            .is_some()
+        {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+
+        Ok(Stmt::If {
+            condition,
+            then,
+            els,
+        })
     }
 
     fn expression_statement(&mut self) -> ParserStmtResult<'s> {

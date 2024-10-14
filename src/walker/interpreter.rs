@@ -91,6 +91,17 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             Stmt::Expression { expr } => {
                 self.evaluate(expr)?;
             }
+            Stmt::If {
+                condition,
+                then,
+                els,
+            } => {
+                if self.evaluate(condition)?.is_truthy() {
+                    self.execute(then)?
+                } else if let Some(e) = els {
+                    self.execute(e)?;
+                }
+            }
             Stmt::Print { expr } => {
                 let value = self.evaluate(expr)?;
                 writeln!(self.streams.borrow_mut().output, "{}", &value)

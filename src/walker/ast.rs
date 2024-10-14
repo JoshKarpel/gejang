@@ -5,6 +5,7 @@ use itertools::Itertools;
 use crate::shared::scanner::Token;
 
 type E<'s> = Box<Expr<'s>>;
+type S<'s> = Box<Stmt<'s>>;
 type T<'s> = &'s Token<'s>;
 
 #[derive(Debug, PartialEq)]
@@ -59,6 +60,11 @@ pub enum Stmt<'s> {
     Expression {
         expr: E<'s>,
     },
+    If {
+        condition: E<'s>,
+        then: S<'s>,
+        els: Option<S<'s>>,
+    },
     Print {
         expr: E<'s>,
     },
@@ -79,6 +85,17 @@ impl Display for Stmt<'_> {
                 }
                 Stmt::Expression { expr } => {
                     format!("(expression {expr})")
+                }
+                Stmt::If {
+                    condition,
+                    then,
+                    els,
+                } => {
+                    if let Some(e) = els {
+                        format!("(if {} then {} else {}", condition, then, e)
+                    } else {
+                        format!("(if {} then {}", condition, then)
+                    }
                 }
                 Stmt::Print { expr } => {
                     format!("(print {expr})")

@@ -154,6 +154,10 @@ var a = 1;
 }"#,
         "3\n"
     )]
+    #[case("if (true) print 1;", "1\n")]
+    #[case("if (false) print 1;", "")]
+    #[case("if (true) print 1; else print 0;", "1\n")]
+    #[case("if (false) print 1; else print 0;", "0\n")]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         let streams = RefCell::new(Streams::test());
         interpret(source, &streams).unwrap();
