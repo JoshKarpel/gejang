@@ -105,12 +105,45 @@ mod tests {
     use super::*;
 
     #[rstest]
-    #[case("print 1 + 2;", "3")]
-    #[case("print 2 * 4 + 3;", "11")]
-    #[case("print true;", "true")]
-    #[case("print \"one\";", "one")]
-    #[case("var foo = \"bar\"; print foo;", "bar")]
-    #[case("var foo = 1 + 2 * 6; print foo;", "13")]
+    #[case("print 1 + 2;", "3\n")]
+    #[case("print 2 * 4 + 3;", "11\n")]
+    #[case("print true;", "true\n")]
+    #[case("print \"one\";", "one\n")]
+    #[case("var foo = \"bar\"; print foo;", "bar\n")]
+    #[case("var foo = 1 + 2 * 6; print foo;", "13\n")]
+    #[case(
+        r#"
+var a = "global a";
+var b = "global b";
+var c = "global c";
+{
+  var a = "outer a";
+  var b = "outer b";
+  {
+    var a = "inner a";
+    print a;
+    print b;
+    print c;
+  }
+  print a;
+  print b;
+  print c;
+}
+print a;
+print b;
+print c;"#,
+        "\
+inner a
+outer b
+global c
+outer a
+outer b
+global c
+global a
+global b
+global c
+"
+    )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         let streams = RefCell::new(Streams::test());
         interpret(source, &streams).unwrap();

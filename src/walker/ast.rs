@@ -1,5 +1,7 @@
 use std::{fmt, fmt::Display};
 
+use itertools::Itertools;
+
 use crate::shared::scanner::Token;
 
 type E<'s> = Box<Expr<'s>>;
@@ -51,6 +53,9 @@ impl Display for Expr<'_> {
 
 #[derive(Debug, PartialEq)]
 pub enum Stmt<'s> {
+    Block {
+        stmts: Vec<Stmt<'s>>,
+    },
     Expression {
         expr: E<'s>,
     },
@@ -69,6 +74,9 @@ impl Display for Stmt<'_> {
             f,
             "{}",
             match self {
+                Stmt::Block { stmts } => {
+                    format!("(block {}", stmts.iter().map(|s| s.to_string()).join(", "))
+                }
                 Stmt::Expression { expr } => {
                     format!("(expression {expr})")
                 }

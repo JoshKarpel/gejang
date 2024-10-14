@@ -18,35 +18,65 @@ use crate::{
 #[derive(Debug, Default)]
 struct Environment<'s> {
     values: HashMap<Cow<'s, str>, Value<'s>>,
+    parent: Option<&'s Environment<'s>>,
 }
 
 impl<'s> Environment<'s> {
+    fn child(&'s self) -> Self {
+        Environment {
+            values: HashMap::new(),
+            parent: Some(self),
+        }
+    }
+
     fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
         self.values.insert(name, value);
     }
 
-    fn get(&self, name: &Token<'s>) -> EvaluationResult<'s> {
-        self.values
-            .get(name.lexeme)
-            .cloned() // TODO: clone means we can't mutate objects!
-            .ok_or_else(|| RuntimeError::UndefinedVariable {
-                name: name.lexeme.to_string(),
-            })
+    fn get(&self, name: &Token<'s>) -> Option<Value<'s>> {
+        self.values.get(name.lexeme).cloned() // TODO: clone means we can't mutate objects!
     }
 }
 
 #[derive(Debug)]
 pub struct Interpreter<'s, 'io, I: Read, O: Write, E: Write> {
-    environment: RefCell<Environment<'s>>,
+    environments: RefCell<Vec<Environment<'s>>>,
     streams: &'io RefCell<Streams<I, O, E>>,
 }
 
 impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
     pub fn new(streams: &'io RefCell<Streams<I, O, E>>) -> Self {
         Self {
-            environment: RefCell::new(Environment::default()),
+            environments: RefCell::new(vec![Environment::default()]),
             streams,
         }
+    }
+
+    fn push_env(&self) {
+        self.environments.borrow_mut().push(Environment::default());
+    }
+
+    fn pop_env(&self) {
+        self.environments.borrow_mut().pop();
+    }
+
+    fn env_define(&self, name: &Token<'s>, value: Value<'s>) {
+        self.environments
+            .borrow_mut()
+            .last_mut()
+            .expect("Unexpectedly empty environment stack!")
+            .define(name.lexeme.into(), value);
+    }
+
+    fn env_get(&self, name: &Token<'s>) -> EvaluationResult<'s> {
+        self.environments
+            .borrow()
+            .iter()
+            .rev()
+            .find_map(|e| e.get(name))
+            .ok_or_else(|| RuntimeError::UndefinedVariable {
+                name: name.lexeme.to_string(),
+            })
     }
 
     pub fn interpret(&'s self, statements: &'s [Stmt<'s>]) -> InterpretResult {
@@ -59,12 +89,20 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
     pub fn execute(&'s self, stmt: &'s Stmt<'s>) -> InterpretResult {
         match stmt {
-            Stmt::Expression { expr } => self.evaluate(expr)?,
+            Stmt::Block { stmts } => {
+                self.push_env();
+                for stmt in stmts {
+                    self.execute(stmt)?
+                }
+                self.pop_env();
+            }
+            Stmt::Expression { expr } => {
+                self.evaluate(expr)?;
+            }
             Stmt::Print { expr } => {
                 let value = self.evaluate(expr)?;
-                write!(self.streams.borrow_mut().output, "{}", &value)
+                writeln!(self.streams.borrow_mut().output, "{}", &value)
                     .map_err(|_| RuntimeError::PrintFailed)?;
-                value
             }
             Stmt::Var { name, initializer } => {
                 let ival = if let Some(init) = initializer {
@@ -73,10 +111,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     Value::Nil
                 };
 
-                self.environment
-                    .borrow_mut()
-                    .define(name.lexeme.into(), ival);
-                Value::Nil
+                self.env_define(name, ival);
             }
         };
 
@@ -139,7 +174,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     }
                 }
             }
-            Expr::Variable { name } => self.environment.borrow().get(name)?,
+            Expr::Variable { name } => self.env_get(name)?,
         })
     }
 }

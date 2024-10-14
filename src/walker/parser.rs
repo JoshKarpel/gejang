@@ -134,7 +134,7 @@ where
                 None
             };
 
-            self.require_semicolon()?;
+            self.require_token(TokenType::Semicolon)?;
 
             Ok(Stmt::Var { name, initializer })
         } else {
@@ -152,9 +152,13 @@ where
 
     fn statement(&mut self) -> ParserStmtResult<'s> {
         // TODO: can we avoid matching twice?
-        if let Some(token) = self.tokens.next_if(|t| matches!(t.typ, TokenType::Print)) {
+        if let Some(token) = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Print | TokenType::LeftBrace))
+        {
             match token.typ {
                 TokenType::Print => self.print_statement(),
+                TokenType::LeftBrace => self.block(),
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {
@@ -164,29 +168,45 @@ where
 
     fn print_statement(&mut self) -> ParserStmtResult<'s> {
         let expr = self.expression()?;
-        self.require_semicolon()?;
+        self.require_token(TokenType::Semicolon)?;
         Ok(Stmt::Print {
             expr: Box::new(expr),
         })
     }
 
+    fn block(&mut self) -> ParserStmtResult<'s> {
+        let mut stmts = Vec::new();
+
+        while self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::RightBrace))
+        {
+            stmts.push(self.declaration()?);
+        }
+
+        self.require_token(TokenType::RightBrace);
+
+        Ok(Stmt::Block { stmts })
+    }
+
     fn expression_statement(&mut self) -> ParserStmtResult<'s> {
         let expr = self.expression()?;
-        self.require_semicolon()?;
+        self.require_token(TokenType::Semicolon)?;
         Ok(Stmt::Expression {
             expr: Box::new(expr),
         })
     }
 
-    fn require_semicolon(&mut self) -> Result<(), ParserError<'s>> {
+    fn require_token(&mut self, typ: TokenType<'s>) -> Result<(), ParserError<'s>> {
         self.tokens
-            .next_if(|t| matches!(t.typ, TokenType::Semicolon))
+            .next_if(|t| t.typ == typ)
             .ok_or_else(|| {
                 self.tokens
                     .peek()
                     .map_or(ParserError::UnexpectedEndOfInput, |token| {
                         ParserError::UnexpectedToken {
-                            expected: TokenType::Semicolon,
+                            expected: typ,
                             token,
                         }
                     })
