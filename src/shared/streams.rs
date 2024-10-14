@@ -21,16 +21,20 @@ impl Streams<Stdin, Stdout, Stderr> {
 }
 
 #[cfg(test)]
-impl Streams<&[u8], Vec<u8>, Stderr> {
+impl Streams<&[u8], Vec<u8>, Vec<u8>> {
     pub fn test() -> Self {
         Streams {
             input: &[],
             output: Vec::new(),
-            error: io::stderr(),
+            error: Vec::new(),
         }
     }
 
     pub fn get_output(&self) -> Result<String, std::string::FromUtf8Error> {
         String::from_utf8(self.output.clone())
+    }
+
+    pub fn get_error(&self) -> Result<String, std::string::FromUtf8Error> {
+        String::from_utf8(self.error.clone())
     }
 }

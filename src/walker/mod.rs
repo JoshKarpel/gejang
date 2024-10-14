@@ -167,7 +167,9 @@ var a = 1;
     #[case("print false and \"yes\";", "false\n")]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         let streams = RefCell::new(Streams::test());
-        interpret(source, &streams).unwrap();
+        let r = interpret(source, &streams);
+        println!("{}", streams.borrow().get_error().unwrap());
+        r.unwrap();
         assert_eq!(streams.borrow().get_output().unwrap(), expected);
     }
 }
