@@ -18,17 +18,9 @@ use crate::{
 #[derive(Debug, Default)]
 struct Environment<'s> {
     values: HashMap<Cow<'s, str>, Value<'s>>,
-    parent: Option<&'s Environment<'s>>,
 }
 
 impl<'s> Environment<'s> {
-    fn child(&'s self) -> Self {
-        Environment {
-            values: HashMap::new(),
-            parent: Some(self),
-        }
-    }
-
     fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
         self.values.insert(name, value);
     }

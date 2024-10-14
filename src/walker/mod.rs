@@ -111,6 +111,7 @@ mod tests {
     #[case("print \"one\";", "one\n")]
     #[case("var foo = \"bar\"; print foo;", "bar\n")]
     #[case("var foo = 1 + 2 * 6; print foo;", "13\n")]
+    #[case("var foo; print foo;", "nil\n")]
     #[case(
         r#"
 var a = "global a";

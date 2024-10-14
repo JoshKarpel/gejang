@@ -15,10 +15,10 @@ flows:
 targets:
   tests:
     commands: |
-      cargo test
+      cargo test --quiet
   clippy:
     commands: |
-      cargo clippy
+      cargo clippy -- --deny warnings
 
 triggers:
   code-changes:

@@ -185,7 +185,7 @@ where
             stmts.push(self.declaration()?);
         }
 
-        self.require_token(TokenType::RightBrace);
+        self.require_token(TokenType::RightBrace)?;
 
         Ok(Stmt::Block { stmts })
     }
