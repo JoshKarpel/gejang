@@ -16,6 +16,8 @@ pub enum ParserError<'s> {
     },
     #[error("Unexpected end of input")]
     UnexpectedEndOfInput,
+    #[error("Invalid assignment target")] // better debug info
+    InvalidAssignmentTarget,
 }
 
 type ParserExprResult<'s> = Result<Expr<'s>, ParserError<'s>>;
@@ -240,7 +242,57 @@ where
     }
 
     fn expression(&mut self) -> ParserExprResult<'s> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> ParserExprResult<'s> {
+        let expr = self.or()?;
+
+        if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Equal))
+            .is_some()
+        {
+            let value = Box::new(self.assignment()?);
+
+            if let Expr::Variable { name } = expr {
+                Ok(Expr::Assign { name, value })
+            } else {
+                Err(ParserError::InvalidAssignmentTarget)
+            }
+        } else {
+            Ok(expr)
+        }
+    }
+
+    fn or(&mut self) -> ParserExprResult<'s> {
+        let mut expr = self.and()?;
+
+        while let Some(op) = self.tokens.next_if(|t| matches!(t.typ, TokenType::Or)) {
+            let right = self.and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                op,
+                right: Box::new(right),
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> ParserExprResult<'s> {
+        let mut expr = self.equality()?;
+
+        while let Some(op) = self.tokens.next_if(|t| matches!(t.typ, TokenType::And)) {
+            let right = self.equality()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                op,
+                right: Box::new(right),
+            }
+        }
+
+        Ok(expr)
     }
 
     fn equality(&mut self) -> ParserExprResult<'s> {

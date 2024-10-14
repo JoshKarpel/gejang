@@ -10,6 +10,10 @@ type T<'s> = &'s Token<'s>;
 
 #[derive(Debug, PartialEq)]
 pub enum Expr<'s> {
+    Assign {
+        name: T<'s>,
+        value: E<'s>,
+    },
     Binary {
         left: E<'s>,
         op: T<'s>,
@@ -25,6 +29,11 @@ pub enum Expr<'s> {
     Literal {
         value: T<'s>,
     },
+    Logical {
+        left: E<'s>,
+        op: T<'s>,
+        right: E<'s>,
+    },
     Variable {
         name: T<'s>,
     },
@@ -36,6 +45,9 @@ impl Display for Expr<'_> {
             f,
             "{}",
             match self {
+                Expr::Assign { name, value } => {
+                    format!("(assign {} {})", name.lexeme, value)
+                }
                 Expr::Binary { left, op, right } => {
                     format!("({} {} {})", op.lexeme, left, right)
                 }
@@ -46,6 +58,9 @@ impl Display for Expr<'_> {
                     format!("(grouping {})", expr)
                 }
                 Expr::Literal { value: token } => token.lexeme.into(),
+                Expr::Logical { left, op, right } => {
+                    format!("({} {} {}", op.lexeme, left, right)
+                }
                 Expr::Variable { name } => name.lexeme.into(),
             }
         )

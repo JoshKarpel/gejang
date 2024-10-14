@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashMap,
+    collections::{hash_map::Entry::Occupied, HashMap},
     io::{Read, Write},
 };
 
@@ -23,6 +23,17 @@ struct Environment<'s> {
 impl<'s> Environment<'s> {
     fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
         self.values.insert(name, value);
+    }
+
+    fn assign(&mut self, name: Cow<'s, str>, value: Value<'s>) -> EvaluationResult<'s> {
+        if let Occupied(mut e) = self.values.entry(name.clone()) {
+            e.insert(value.clone()); // TODO: another clone :(
+            Ok(value)
+        } else {
+            Err(RuntimeError::UndefinedVariable {
+                name: name.to_string(),
+            })
+        }
     }
 
     fn get(&self, name: &Token<'s>) -> Option<Value<'s>> {
@@ -58,6 +69,14 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             .last_mut()
             .expect("Unexpectedly empty environment stack!")
             .define(name.lexeme.into(), value);
+    }
+
+    fn env_assign(&self, name: &Token<'s>, value: Value<'s>) -> EvaluationResult<'s> {
+        self.environments
+            .borrow_mut()
+            .last_mut()
+            .expect("Unexpectedly empty environment stack!")
+            .assign(name.lexeme.into(), value)
     }
 
     fn env_get(&self, name: &Token<'s>) -> EvaluationResult<'s> {
@@ -177,7 +196,19 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     }
                 }
             }
+            Expr::Logical { left, op, right } => {
+                let l = self.evaluate(left)?;
+
+                return match (l.is_truthy(), op.typ) {
+                    (true, TokenType::Or) => Ok(l),
+                    (false, TokenType::Or) => self.evaluate(right),
+                    (true, TokenType::And) => self.evaluate(right),
+                    (false, TokenType::And) => Ok(l),
+                    _ => unreachable!("Unexpected logical result/operator"),
+                };
+            }
             Expr::Variable { name } => self.env_get(name)?,
+            Expr::Assign { name, value } => self.env_assign(name, self.evaluate(value)?)?,
         })
     }
 }

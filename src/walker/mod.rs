@@ -112,6 +112,7 @@ mod tests {
     #[case("var foo = \"bar\"; print foo;", "bar\n")]
     #[case("var foo = 1 + 2 * 6; print foo;", "13\n")]
     #[case("var foo; print foo;", "nil\n")]
+    #[case("var foo; print foo = 2;", "2\n")]
     #[case(
         r#"
 var a = "global a";
@@ -158,6 +159,12 @@ var a = 1;
     #[case("if (false) print 1;", "")]
     #[case("if (true) print 1; else print 0;", "1\n")]
     #[case("if (false) print 1; else print 0;", "0\n")]
+    #[case("print \"hi\" or 2;", "hi\n")]
+    #[case("print nil or \"yes\";", "yes\n")]
+    #[case("print false or \"yes\";", "yes\n")]
+    #[case("print \"hi\" and 2;", "2\n")]
+    #[case("print nil and \"yes\";", "nil\n")]
+    #[case("print false and \"yes\";", "false\n")]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         let streams = RefCell::new(Streams::test());
         interpret(source, &streams).unwrap();
