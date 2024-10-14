@@ -145,6 +145,15 @@ global b
 global c
 "
     )]
+    #[case(
+        r#"
+var a = 1;
+{
+  var a = a + 2;
+  print a;
+}"#,
+        "3\n"
+    )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         let streams = RefCell::new(Streams::test());
         interpret(source, &streams).unwrap();
