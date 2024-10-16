@@ -4,38 +4,38 @@ use itertools::Itertools;
 
 use crate::shared::scanner::Token;
 
-type E<'s> = Box<Expr<'s>>;
-type S<'s> = Box<Stmt<'s>>;
-type T<'s> = &'s Token<'s>;
+type BoxedExpr<'s> = Box<Expr<'s>>;
+type BoxedStmt<'s> = Box<Stmt<'s>>;
+type RefToken<'s> = &'s Token<'s>;
 
 #[derive(Debug, PartialEq)]
 pub enum Expr<'s> {
     Assign {
-        name: T<'s>,
-        value: E<'s>,
+        name: RefToken<'s>,
+        value: BoxedExpr<'s>,
     },
     Binary {
-        left: E<'s>,
-        op: T<'s>,
-        right: E<'s>,
+        left: BoxedExpr<'s>,
+        op: RefToken<'s>,
+        right: BoxedExpr<'s>,
     },
     Unary {
-        op: T<'s>,
-        right: E<'s>,
+        op: RefToken<'s>,
+        right: BoxedExpr<'s>,
     },
     Grouping {
-        expr: E<'s>,
+        expr: BoxedExpr<'s>,
     },
     Literal {
-        value: T<'s>,
+        value: RefToken<'s>,
     },
     Logical {
-        left: E<'s>,
-        op: T<'s>,
-        right: E<'s>,
+        left: BoxedExpr<'s>,
+        op: RefToken<'s>,
+        right: BoxedExpr<'s>,
     },
     Variable {
-        name: T<'s>,
+        name: RefToken<'s>,
     },
 }
 
@@ -73,19 +73,23 @@ pub enum Stmt<'s> {
         stmts: Vec<Stmt<'s>>,
     },
     Expression {
-        expr: E<'s>,
+        expr: BoxedExpr<'s>,
     },
     If {
-        condition: E<'s>,
-        then: S<'s>,
-        els: Option<S<'s>>,
+        condition: BoxedExpr<'s>,
+        then: BoxedStmt<'s>,
+        els: Option<BoxedStmt<'s>>,
     },
     Print {
-        expr: E<'s>,
+        expr: BoxedExpr<'s>,
     },
     Var {
-        name: T<'s>,
-        initializer: Option<E<'s>>,
+        name: RefToken<'s>,
+        initializer: Option<BoxedExpr<'s>>,
+    },
+    While {
+        condition: BoxedExpr<'s>,
+        body: BoxedStmt<'s>,
     },
 }
 
@@ -96,7 +100,7 @@ impl Display for Stmt<'_> {
             "{}",
             match self {
                 Stmt::Block { stmts } => {
-                    format!("(block {}", stmts.iter().map(|s| s.to_string()).join(", "))
+                    format!("(block {}", stmts.iter().map(|s| s.to_string()).join(" "))
                 }
                 Stmt::Expression { expr } => {
                     format!("(expression {expr})")
@@ -121,6 +125,9 @@ impl Display for Stmt<'_> {
                     } else {
                         format!("(var {})", name.lexeme)
                     }
+                }
+                Stmt::While { condition, body } => {
+                    format!("(while {} {})", condition, body)
                 }
             }
         )

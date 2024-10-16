@@ -157,13 +157,14 @@ where
         if let Some(token) = self.tokens.next_if(|t| {
             matches!(
                 t.typ,
-                TokenType::Print | TokenType::LeftBrace | TokenType::If
+                TokenType::Print | TokenType::LeftBrace | TokenType::If | TokenType::While
             )
         }) {
             match token.typ {
                 TokenType::Print => self.print_statement(),
                 TokenType::LeftBrace => self.block(),
                 TokenType::If => self.if_statement(),
+                TokenType::While => self.while_statement(),
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {
@@ -215,6 +216,15 @@ where
             then,
             els,
         })
+    }
+
+    fn while_statement(&mut self) -> ParserStmtResult<'s> {
+        self.require_token(TokenType::LeftParen)?;
+        let condition = Box::new(self.expression()?);
+        self.require_token(TokenType::RightParen)?;
+        let body = Box::new(self.statement()?);
+
+        Ok(Stmt::While { condition, body })
     }
 
     fn expression_statement(&mut self) -> ParserStmtResult<'s> {

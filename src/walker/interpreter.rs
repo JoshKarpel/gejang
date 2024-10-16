@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::{hash_map::Entry::Occupied, HashMap},
+    collections::HashMap,
     io::{Read, Write},
 };
 
@@ -23,17 +23,6 @@ struct Environment<'s> {
 impl<'s> Environment<'s> {
     fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
         self.values.insert(name, value);
-    }
-
-    fn assign(&mut self, name: Cow<'s, str>, value: Value<'s>) -> EvaluationResult<'s> {
-        if let Occupied(mut e) = self.values.entry(name.clone()) {
-            e.insert(value.clone()); // TODO: another clone :(
-            Ok(value)
-        } else {
-            Err(RuntimeError::UndefinedVariable {
-                name: name.to_string(),
-            })
-        }
     }
 
     fn get(&self, name: &Token<'s>) -> Option<Value<'s>> {
@@ -74,9 +63,15 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
     fn env_assign(&self, name: &Token<'s>, value: Value<'s>) -> EvaluationResult<'s> {
         self.environments
             .borrow_mut()
-            .last_mut()
-            .expect("Unexpectedly empty environment stack!")
-            .assign(name.lexeme.into(), value)
+            .iter_mut()
+            .find(|e| e.get(name).is_some())
+            .map(|e| {
+                e.define(name.lexeme.into(), value.clone());
+                value
+            })
+            .ok_or_else(|| RuntimeError::UndefinedVariable {
+                name: name.lexeme.to_string(),
+            })
     }
 
     fn env_get(&self, name: &Token<'s>) -> EvaluationResult<'s> {
@@ -134,6 +129,11 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 };
 
                 self.env_define(name, ival);
+            }
+            Stmt::While { condition, body } => {
+                while self.evaluate(condition)?.is_truthy() {
+                    self.execute(body)?
+                }
             }
         };
 
