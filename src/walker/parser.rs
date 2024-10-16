@@ -16,6 +16,8 @@ pub enum ParserError<'s> {
     },
     #[error("Unexpected end of input")]
     UnexpectedEndOfInput,
+    #[error("Invalid assignment target")] // better debug info
+    InvalidAssignmentTarget,
 }
 
 type ParserExprResult<'s> = Result<Expr<'s>, ParserError<'s>>;
@@ -66,6 +68,12 @@ where
         }
     }
 }
+
+const TRUE: Token = Token {
+    typ: TokenType::True,
+    lexeme: "true",
+    line: 0,
+};
 
 impl<'s, I> Parser<I>
 where
@@ -152,18 +160,92 @@ where
 
     fn statement(&mut self) -> ParserStmtResult<'s> {
         // TODO: can we avoid matching twice?
-        if let Some(token) = self
-            .tokens
-            .next_if(|t| matches!(t.typ, TokenType::Print | TokenType::LeftBrace))
-        {
+        if let Some(token) = self.tokens.next_if(|t| {
+            matches!(
+                t.typ,
+                TokenType::For
+                    | TokenType::Print
+                    | TokenType::LeftBrace
+                    | TokenType::If
+                    | TokenType::While
+            )
+        }) {
             match token.typ {
+                TokenType::For => self.for_statement(),
                 TokenType::Print => self.print_statement(),
                 TokenType::LeftBrace => self.block(),
+                TokenType::If => self.if_statement(),
+                TokenType::While => self.while_statement(),
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {
             self.expression_statement()
         }
+    }
+
+    fn for_statement(&mut self) -> ParserStmtResult<'s> {
+        self.require_token(TokenType::LeftParen)?;
+
+        let initializer = if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Semicolon))
+            .is_some()
+        {
+            None
+        } else if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Var))
+            .is_some()
+        {
+            Some(self.variable_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let condition = if self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::Semicolon))
+        {
+            self.expression()?
+        } else {
+            Expr::Literal { value: &TRUE }
+        };
+
+        self.require_token(TokenType::Semicolon)?;
+
+        let increment = if self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
+        {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.require_token(TokenType::RightParen)?;
+
+        let mut body = self.statement()?;
+
+        if let Some(i) = increment {
+            body = Stmt::Block {
+                stmts: vec![body, Stmt::Expression { expr: Box::new(i) }],
+            }
+        }
+
+        body = Stmt::While {
+            condition: Box::new(condition),
+            body: Box::new(body),
+        };
+
+        if let Some(i) = initializer {
+            body = Stmt::Block {
+                stmts: vec![i, body],
+            }
+        }
+
+        Ok(body)
     }
 
     fn print_statement(&mut self) -> ParserStmtResult<'s> {
@@ -188,6 +270,37 @@ where
         self.require_token(TokenType::RightBrace)?;
 
         Ok(Stmt::Block { stmts })
+    }
+
+    fn if_statement(&mut self) -> ParserStmtResult<'s> {
+        self.require_token(TokenType::LeftParen)?;
+        let condition = Box::new(self.expression()?);
+        self.require_token(TokenType::RightParen)?;
+        let then = Box::new(self.statement()?);
+        let els = if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Else))
+            .is_some()
+        {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+
+        Ok(Stmt::If {
+            condition,
+            then,
+            els,
+        })
+    }
+
+    fn while_statement(&mut self) -> ParserStmtResult<'s> {
+        self.require_token(TokenType::LeftParen)?;
+        let condition = Box::new(self.expression()?);
+        self.require_token(TokenType::RightParen)?;
+        let body = Box::new(self.statement()?);
+
+        Ok(Stmt::While { condition, body })
     }
 
     fn expression_statement(&mut self) -> ParserStmtResult<'s> {
@@ -215,7 +328,57 @@ where
     }
 
     fn expression(&mut self) -> ParserExprResult<'s> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> ParserExprResult<'s> {
+        let expr = self.or()?;
+
+        if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Equal))
+            .is_some()
+        {
+            let value = Box::new(self.assignment()?);
+
+            if let Expr::Variable { name } = expr {
+                Ok(Expr::Assign { name, value })
+            } else {
+                Err(ParserError::InvalidAssignmentTarget)
+            }
+        } else {
+            Ok(expr)
+        }
+    }
+
+    fn or(&mut self) -> ParserExprResult<'s> {
+        let mut expr = self.and()?;
+
+        while let Some(op) = self.tokens.next_if(|t| matches!(t.typ, TokenType::Or)) {
+            let right = self.and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                op,
+                right: Box::new(right),
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> ParserExprResult<'s> {
+        let mut expr = self.equality()?;
+
+        while let Some(op) = self.tokens.next_if(|t| matches!(t.typ, TokenType::And)) {
+            let right = self.equality()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                op,
+                right: Box::new(right),
+            }
+        }
+
+        Ok(expr)
     }
 
     fn equality(&mut self) -> ParserExprResult<'s> {

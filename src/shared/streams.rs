@@ -33,4 +33,8 @@ impl Streams<&[u8], Vec<u8>, Vec<u8>> {
     pub fn get_output(&self) -> Result<String, std::string::FromUtf8Error> {
         String::from_utf8(self.output.clone())
     }
+
+    pub fn get_error(&self) -> Result<String, std::string::FromUtf8Error> {
+        String::from_utf8(self.error.clone())
+    }
 }

@@ -112,6 +112,7 @@ mod tests {
     #[case("var foo = \"bar\"; print foo;", "bar\n")]
     #[case("var foo = 1 + 2 * 6; print foo;", "13\n")]
     #[case("var foo; print foo;", "nil\n")]
+    #[case("var foo; print foo = 2;", "2\n")]
     #[case(
         r#"
 var a = "global a";
@@ -154,9 +155,28 @@ var a = 1;
 }"#,
         "3\n"
     )]
+    #[case("if (true) print 1;", "1\n")]
+    #[case("if (false) print 1;", "")]
+    #[case("if (true) print 1; else print 0;", "1\n")]
+    #[case("if (false) print 1; else print 0;", "0\n")]
+    #[case("print \"hi\" or 2;", "hi\n")]
+    #[case("print nil or \"yes\";", "yes\n")]
+    #[case("print false or \"yes\";", "yes\n")]
+    #[case("print \"hi\" and 2;", "2\n")]
+    #[case("print nil and \"yes\";", "nil\n")]
+    #[case("print false and \"yes\";", "false\n")]
+    #[case("var i = 0; while (i < 3) {print i; i = i + 1;}", "0\n1\n2\n")]
+    #[case("for (var i = 0; i < 3; i = i + 1) print i;", "0\n1\n2\n")]
+    #[case("var i = 0; for (; i < 3; i = i + 1) print i;", "0\n1\n2\n")]
+    #[case("for (var i = 0; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]
+    #[case("var i = 0; for (; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
+        println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());
-        interpret(source, &streams).unwrap();
+        let r = interpret(source, &streams);
+        println!("stdout:\n{}", streams.borrow().get_output().unwrap());
+        println!("stderr:\n{}", streams.borrow().get_error().unwrap());
+        r.unwrap();
         assert_eq!(streams.borrow().get_output().unwrap(), expected);
     }
 }

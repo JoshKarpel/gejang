@@ -60,6 +60,20 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             .define(name.lexeme.into(), value);
     }
 
+    fn env_assign(&self, name: &Token<'s>, value: Value<'s>) -> EvaluationResult<'s> {
+        self.environments
+            .borrow_mut()
+            .iter_mut()
+            .find(|e| e.get(name).is_some())
+            .map(|e| {
+                e.define(name.lexeme.into(), value.clone());
+                value
+            })
+            .ok_or_else(|| RuntimeError::UndefinedVariable {
+                name: name.lexeme.to_string(),
+            })
+    }
+
     fn env_get(&self, name: &Token<'s>) -> EvaluationResult<'s> {
         self.environments
             .borrow()
@@ -91,6 +105,17 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             Stmt::Expression { expr } => {
                 self.evaluate(expr)?;
             }
+            Stmt::If {
+                condition,
+                then,
+                els,
+            } => {
+                if self.evaluate(condition)?.is_truthy() {
+                    self.execute(then)?
+                } else if let Some(e) = els {
+                    self.execute(e)?;
+                }
+            }
             Stmt::Print { expr } => {
                 let value = self.evaluate(expr)?;
                 writeln!(self.streams.borrow_mut().output, "{}", &value)
@@ -104,6 +129,11 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 };
 
                 self.env_define(name, ival);
+            }
+            Stmt::While { condition, body } => {
+                while self.evaluate(condition)?.is_truthy() {
+                    self.execute(body)?
+                }
             }
         };
 
@@ -166,7 +196,19 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     }
                 }
             }
+            Expr::Logical { left, op, right } => {
+                let l = self.evaluate(left)?;
+
+                return match (l.is_truthy(), op.typ) {
+                    (true, TokenType::Or) => Ok(l),
+                    (false, TokenType::Or) => self.evaluate(right),
+                    (true, TokenType::And) => self.evaluate(right),
+                    (false, TokenType::And) => Ok(l),
+                    _ => unreachable!("Unexpected logical result/operator"),
+                };
+            }
             Expr::Variable { name } => self.env_get(name)?,
+            Expr::Assign { name, value } => self.env_assign(name, self.evaluate(value)?)?,
         })
     }
 }
