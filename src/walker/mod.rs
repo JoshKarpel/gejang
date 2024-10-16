@@ -166,11 +166,16 @@ var a = 1;
     #[case("print nil and \"yes\";", "nil\n")]
     #[case("print false and \"yes\";", "false\n")]
     #[case("var i = 0; while (i < 3) {print i; i = i + 1;}", "0\n1\n2\n")]
+    #[case("for (var i = 0; i < 3; i = i + 1) print i;", "0\n1\n2\n")]
+    #[case("var i = 0; for (; i < 3; i = i + 1) print i;", "0\n1\n2\n")]
+    #[case("for (var i = 0; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]
+    #[case("var i = 0; for (; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
+        println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());
         let r = interpret(source, &streams);
-        println!("{}", streams.borrow().get_output().unwrap());
-        println!("{}", streams.borrow().get_error().unwrap());
+        println!("stdout:\n{}", streams.borrow().get_output().unwrap());
+        println!("stderr:\n{}", streams.borrow().get_error().unwrap());
         r.unwrap();
         assert_eq!(streams.borrow().get_output().unwrap(), expected);
     }

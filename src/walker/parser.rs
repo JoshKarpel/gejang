@@ -69,6 +69,12 @@ where
     }
 }
 
+const TRUE: Token = Token {
+    typ: TokenType::True,
+    lexeme: "true",
+    line: 0,
+};
+
 impl<'s, I> Parser<I>
 where
     I: Iterator<Item = &'s Token<'s>>,
@@ -157,10 +163,15 @@ where
         if let Some(token) = self.tokens.next_if(|t| {
             matches!(
                 t.typ,
-                TokenType::Print | TokenType::LeftBrace | TokenType::If | TokenType::While
+                TokenType::For
+                    | TokenType::Print
+                    | TokenType::LeftBrace
+                    | TokenType::If
+                    | TokenType::While
             )
         }) {
             match token.typ {
+                TokenType::For => self.for_statement(),
                 TokenType::Print => self.print_statement(),
                 TokenType::LeftBrace => self.block(),
                 TokenType::If => self.if_statement(),
@@ -170,6 +181,71 @@ where
         } else {
             self.expression_statement()
         }
+    }
+
+    fn for_statement(&mut self) -> ParserStmtResult<'s> {
+        self.require_token(TokenType::LeftParen)?;
+
+        let initializer = if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Semicolon))
+            .is_some()
+        {
+            None
+        } else if self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Var))
+            .is_some()
+        {
+            Some(self.variable_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let condition = if self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::Semicolon))
+        {
+            self.expression()?
+        } else {
+            Expr::Literal { value: &TRUE }
+        };
+
+        self.require_token(TokenType::Semicolon)?;
+
+        let increment = if self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
+        {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.require_token(TokenType::RightParen)?;
+
+        let mut body = self.statement()?;
+
+        if let Some(i) = increment {
+            body = Stmt::Block {
+                stmts: vec![body, Stmt::Expression { expr: Box::new(i) }],
+            }
+        }
+
+        body = Stmt::While {
+            condition: Box::new(condition),
+            body: Box::new(body),
+        };
+
+        if let Some(i) = initializer {
+            body = Stmt::Block {
+                stmts: vec![i, body],
+            }
+        }
+
+        Ok(body)
     }
 
     fn print_statement(&mut self) -> ParserStmtResult<'s> {
