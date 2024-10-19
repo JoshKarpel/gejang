@@ -311,20 +311,17 @@ where
         })
     }
 
-    fn require_token(&mut self, typ: TokenType<'s>) -> Result<(), ParserError<'s>> {
-        self.tokens
-            .next_if(|t| t.typ == typ)
-            .ok_or_else(|| {
-                self.tokens
-                    .peek()
-                    .map_or(ParserError::UnexpectedEndOfInput, |token| {
-                        ParserError::UnexpectedToken {
-                            expected: typ,
-                            token,
-                        }
-                    })
-            })
-            .map(|_| ())
+    fn require_token(&mut self, typ: TokenType<'s>) -> Result<&Token<'s>, ParserError<'s>> {
+        self.tokens.next_if(|t| t.typ == typ).ok_or_else(|| {
+            self.tokens
+                .peek()
+                .map_or(ParserError::UnexpectedEndOfInput, |token| {
+                    ParserError::UnexpectedToken {
+                        expected: typ,
+                        token,
+                    }
+                })
+        })
     }
 
     fn expression(&mut self) -> ParserExprResult<'s> {
@@ -470,7 +467,50 @@ where
             });
         }
 
-        self.primary()
+        self.call()
+    }
+
+    fn call(&mut self) -> ParserExprResult<'s> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self
+                .tokens
+                .next_if(|t| matches!(t.typ, TokenType::Comma))
+                .is_some()
+            {
+                let mut args = vec![];
+
+                if self
+                    .tokens
+                    .peek()
+                    .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
+                {
+                    loop {
+                        args.push(self.expression()?);
+                        if !self
+                            .tokens
+                            .next_if(|t| !matches!(t.typ, TokenType::Comma))
+                            .is_some()
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                self.require_token(TokenType::RightParen)?;
+
+                expr = Expr::Call {
+                    callee: Box::new(expr),
+                    // paren,  // trouble with multiple mutable borrows here
+                    args,
+                };
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
     }
 
     fn primary(&mut self) -> ParserExprResult<'s> {

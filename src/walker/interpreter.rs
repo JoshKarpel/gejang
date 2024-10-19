@@ -209,6 +209,11 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             }
             Expr::Variable { name } => self.env_get(name)?,
             Expr::Assign { name, value } => self.env_assign(name, self.evaluate(value)?)?,
+            Expr::Call { callee, args } => {
+                let c = self.evaluate(callee);
+
+                let a = args.iter().map(|arg| self.evaluate(arg));
+            }
         })
     }
 }
