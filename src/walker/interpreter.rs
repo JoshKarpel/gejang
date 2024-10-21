@@ -3,6 +3,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     io::{Read, Write},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::{
@@ -21,6 +22,28 @@ struct Environment<'s> {
 }
 
 impl<'s> Environment<'s> {
+    fn global() -> Self {
+        let mut e = Self::default();
+
+        e.define(
+            Cow::from("clock"),
+            Value::NativeFunction {
+                name: "clock",
+
+                f: || {
+                    let now = SystemTime::now();
+                    Value::Number(
+                        now.duration_since(UNIX_EPOCH)
+                            .expect("Are you living in the past?")
+                            .as_secs_f64(),
+                    )
+                },
+            },
+        );
+
+        e
+    }
+
     fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
         self.values.insert(name, value);
     }
@@ -39,7 +62,7 @@ pub struct Interpreter<'s, 'io, I: Read, O: Write, E: Write> {
 impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
     pub fn new(streams: &'io RefCell<Streams<I, O, E>>) -> Self {
         Self {
-            environments: RefCell::new(vec![Environment::default()]),
+            environments: RefCell::new(vec![Environment::global()]),
             streams,
         }
     }
@@ -277,15 +300,24 @@ mod tests {
     #[case("2 > 2;", Ok(Value::Boolean(false)))]
     #[case("3 > 2;", Ok(Value::Boolean(true)))]
     #[case("\"foo\" + \"bar\";", Ok(Value::String("foobar".into())))]
-    #[case("\"foo\" + 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String + Number".into() }))]
-    #[case("1 + \"foo\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + String".into() }))]
-    #[case("1 + true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
-    #[case("1 + false;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }))]
-    #[case("1 + nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Nil".into() }))]
-    #[case("\"foo\" > true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Boolean".into() }))]
-    #[case("\"foo\" > \"bar\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > String".into() }))]
-    #[case("\"foo\" > 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Number".into() }))]
-    #[case("\"foo\" > nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Nil".into() }))]
+    #[case("\"foo\" + 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String + Number".into() }
+    ))]
+    #[case("1 + \"foo\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + String".into() }
+    ))]
+    #[case("1 + true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }
+    ))]
+    #[case("1 + false;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Boolean".into() }
+    ))]
+    #[case("1 + nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: Number + Nil".into() }
+    ))]
+    #[case("\"foo\" > true;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Boolean".into() }
+    ))]
+    #[case("\"foo\" > \"bar\";", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > String".into() }
+    ))]
+    #[case("\"foo\" > 1;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Number".into() }
+    ))]
+    #[case("\"foo\" > nil;", Err(RuntimeError::Unimplemented { msg: "Binary operation not implemented: String > Nil".into() }
+    ))]
     fn test_evaluate<'s>(#[case] source: &'s str, #[case] expected: EvaluationResult<'s>) {
         let streams = RefCell::new(Streams::test());
         let interpreter = Interpreter::new(&streams);
