@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::{HashMap, LinkedList},
+    collections::HashMap,
     io::{Read, Write},
     rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
@@ -86,27 +86,24 @@ impl<'s> Environment<'s> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct EnvironmentStack<'s>(LinkedList<Rc<RefCell<Environment<'s>>>>);
+pub struct EnvironmentStack<'s>(Vec<Rc<RefCell<Environment<'s>>>>);
 
 impl<'s> EnvironmentStack<'s> {
     fn global() -> Self {
-        let mut ll = LinkedList::new();
-        ll.push_back(Rc::new(RefCell::new(Environment::global())));
-        EnvironmentStack(ll)
+        EnvironmentStack(vec![Rc::new(RefCell::new(Environment::global()))])
     }
 
     fn push(&mut self) {
-        self.0
-            .push_back(Rc::new(RefCell::new(Environment::default())))
+        self.0.push(Rc::new(RefCell::new(Environment::default())))
     }
 
     fn pop(&mut self) {
-        self.0.pop_back();
+        self.0.pop();
     }
 
     fn define(&self, name: Cow<'s, str>, value: Value<'s>) {
         self.0
-            .back()
+            .last()
             .expect("Empty environment stack")
             .borrow_mut()
             .define(name, value);
