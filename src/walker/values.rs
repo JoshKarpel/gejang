@@ -65,12 +65,12 @@ impl Display for Value<'_> {
                 Value::Boolean(value) => value.to_string(),
                 Value::Nil => "nil".to_string(),
                 Value::NativeFunction { name, f: _, arity } =>
-                    format!("<native fn {name}/{arity}>"),
+                    format!("<native fun {name}/{arity}>"),
                 Value::Function {
                     name,
                     params,
                     body: _,
-                } => format!("<fn {}/{}>", name, params.len()),
+                } => format!("<fun {}/{}>", name, params.len()),
             }
         )
     }
