@@ -325,7 +325,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                             });
                         };
 
-                        self.push_env();
+                        self.push_env(); // TODO: this is wrong, at this point functions should execute in global scope, then definition-scope with closures
 
                         a.iter().zip(params.iter()).for_each(|(arg, param)| {
                             self.env_define_from_str(param, arg.clone()) // TODO another clone
