@@ -115,6 +115,14 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             .define(name.lexeme.into(), value);
     }
 
+    fn env_define_from_str(&self, name: &'s str, value: Value<'s>) {
+        self.environments
+            .borrow_mut()
+            .last_mut()
+            .expect("Unexpectedly empty environment stack!")
+            .define(name.into(), value);
+    }
+
     fn env_assign(&self, name: &Token<'s>, value: Value<'s>) -> EvaluationResult<'s> {
         self.environments
             .borrow_mut()
@@ -295,9 +303,26 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     }
                     Value::Function {
                         name: _,
-                        params: _,
-                        body: _,
-                    } => todo!(),
+                        params,
+                        body,
+                    } => {
+                        let num_params = params.len();
+                        if num_args != num_params {
+                            return Err(RuntimeError::WrongNumberOfArgs {
+                                arity: num_params,
+                                got: num_args,
+                            });
+                        };
+
+                        self.push_env();
+
+                        a.iter().zip(params.iter()).for_each(|(arg, param)| {
+                            self.env_define_from_str(param, arg.clone()) // TODO another clone
+                        });
+
+                        self.interpret(body)?;
+                        Value::Nil // TODO: return values!
+                    }
                     _ => {
                         return Err(RuntimeError::NotCallable {
                             typ: c.as_ref().to_string(),
