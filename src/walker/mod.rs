@@ -217,8 +217,9 @@ fun makeCounter() {
 
 var counter = makeCounter();
 counter();
+counter();
 counter();"#,
-        "1\n2\n"
+        "1\n2\n3\n"
     )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);
