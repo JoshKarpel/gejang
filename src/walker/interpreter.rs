@@ -321,6 +321,9 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                         });
 
                         self.interpret(body)?;
+
+                        self.pop_env();
+
                         Value::Nil // TODO: return values!
                     }
                     _ => {
