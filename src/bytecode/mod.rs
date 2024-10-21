@@ -12,6 +12,7 @@ use crate::{
 
 mod compiler;
 mod ops;
+pub mod values;
 mod virtual_machine;
 
 pub fn exec(source: &str) -> Result<()> {

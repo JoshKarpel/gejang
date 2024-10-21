@@ -3,11 +3,11 @@ use std::iter::Peekable;
 use thiserror::Error;
 
 use crate::{
-    bytecode::ops::{Chunk, OpCode},
-    shared::{
-        scanner::{Precedence, Token, TokenType},
+    bytecode::{
+        ops::{Chunk, OpCode},
         values::Value,
     },
+    shared::scanner::{Precedence, Token, TokenType},
 };
 
 #[derive(Error, Clone, PartialEq, PartialOrd, Debug)]

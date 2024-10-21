@@ -168,6 +168,7 @@ where
                     | TokenType::LeftBrace
                     | TokenType::If
                     | TokenType::While
+                    | TokenType::Fun
             )
         }) {
             match token.typ {
@@ -176,6 +177,7 @@ where
                 TokenType::LeftBrace => self.block(),
                 TokenType::If => self.if_statement(),
                 TokenType::While => self.while_statement(),
+                TokenType::Fun => self.function(),
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {
@@ -301,6 +303,67 @@ where
         let body = Box::new(self.statement()?);
 
         Ok(Stmt::While { condition, body })
+    }
+
+    fn function(&mut self) -> ParserStmtResult<'s> {
+        let name = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+            .ok_or_else(|| ParserError::UnexpectedToken {
+                expected: TokenType::Identifier(""),
+                token: self
+                    .tokens
+                    .peek()
+                    .ok_or(ParserError::UnexpectedEndOfInput)
+                    .unwrap(), // TODO what?
+            })?;
+
+        self.require_token(TokenType::LeftParen)?;
+
+        let mut params = vec![];
+
+        while self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
+        {
+            params.push(
+                self.tokens
+                    .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+                    .ok_or_else(|| ParserError::UnexpectedToken {
+                        expected: TokenType::Identifier(""),
+                        token: self
+                            .tokens
+                            .peek()
+                            .ok_or(ParserError::UnexpectedEndOfInput)
+                            .unwrap(), // TODO what?
+                    })?,
+            );
+            if !self
+                .tokens
+                .peek()
+                .is_some_and(|t| matches!(t.typ, TokenType::Comma))
+            {
+                break;
+            }
+        }
+
+        self.require_token(TokenType::RightParen)?;
+
+        self.require_token(TokenType::LeftBrace)?;
+
+        let mut body = vec![];
+        while self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::RightBrace))
+        {
+            body.push(self.declaration()?);
+        }
+
+        self.require_token(TokenType::RightBrace)?;
+
+        Ok(Stmt::Function { name, params, body })
     }
 
     fn expression_statement(&mut self) -> ParserStmtResult<'s> {

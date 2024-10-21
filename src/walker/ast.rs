@@ -91,6 +91,11 @@ pub enum Stmt<'s> {
     Expression {
         expr: BoxedExpr<'s>,
     },
+    Function {
+        name: RefToken<'s>,
+        params: Vec<RefToken<'s>>,
+        body: Vec<Stmt<'s>>,
+    },
     If {
         condition: BoxedExpr<'s>,
         then: BoxedStmt<'s>,
@@ -120,6 +125,14 @@ impl Display for Stmt<'_> {
                 }
                 Stmt::Expression { expr } => {
                     format!("(expression {expr})")
+                }
+                Stmt::Function { name, params, body } => {
+                    format!(
+                        "(function {} ({}) ({})",
+                        name.lexeme,
+                        params.iter().map(|p| p.lexeme).join(" "),
+                        body.iter().map(|s| s.to_string()).join(" ")
+                    )
                 }
                 Stmt::If {
                     condition,

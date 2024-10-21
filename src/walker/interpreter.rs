@@ -6,15 +6,35 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use thiserror::Error;
+
 use crate::{
     shared::{
-        errors::{EvaluationResult, InterpretResult, RuntimeError},
         scanner::{Token, TokenType},
         streams::Streams,
+    },
+    walker::{
+        ast::{Expr, Stmt},
         values::Value,
     },
-    walker::ast::{Expr, Stmt},
 };
+
+#[derive(Error, Clone, Debug, PartialEq)]
+pub enum RuntimeError {
+    #[error("{msg}")]
+    Unimplemented { msg: String },
+    #[error("Print failed")]
+    PrintFailed,
+    #[error("Undefined variable {name}")]
+    UndefinedVariable { name: String },
+    #[error("Value of type {typ} is not callable")]
+    NotCallable { typ: String },
+    #[error("Wrong number of arguments: expected {arity}, got {got}")]
+    WrongNumberOfArgs { arity: usize, got: usize },
+}
+
+pub type InterpretResult = Result<(), RuntimeError>;
+pub type EvaluationResult<'s> = Result<Value<'s>, RuntimeError>;
 
 #[derive(Debug, Default)]
 struct Environment<'s> {
@@ -29,6 +49,7 @@ impl<'s> Environment<'s> {
             Cow::from("clock"),
             Value::NativeFunction {
                 name: "clock",
+                arity: 0,
                 f: |_| {
                     let now = SystemTime::now();
                     Value::Number(
@@ -37,7 +58,6 @@ impl<'s> Environment<'s> {
                             .as_secs_f64(),
                     )
                 },
-                arity: 0,
             },
         );
 
@@ -45,11 +65,11 @@ impl<'s> Environment<'s> {
             Cow::from("tsp2cup"),
             Value::NativeFunction {
                 name: "tsp2cup",
+                arity: 1,
                 f: |args| match args {
                     [Value::Number(tsp)] => Value::Number(tsp / 48.0),
                     _ => unreachable!("Wrong number of arguments"),
                 },
-                arity: 1,
             },
         );
 
@@ -140,6 +160,14 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             Stmt::Expression { expr } => {
                 self.evaluate(expr)?;
             }
+            Stmt::Function { name, params, body } => self.env_define(
+                name,
+                Value::Function {
+                    name: name.lexeme,
+                    params: params.iter().map(|p| p.lexeme).collect(),
+                    body,
+                },
+            ),
             Stmt::If {
                 condition,
                 then,
@@ -256,7 +284,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                 match c {
                     Value::NativeFunction { name: _, f, arity } => {
-                        if num_args != arity as usize {
+                        if num_args != arity {
                             return Err(RuntimeError::WrongNumberOfArgs {
                                 arity,
                                 got: num_args,
@@ -265,6 +293,11 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                         f(&a)
                     }
+                    Value::Function {
+                        name: _,
+                        params: _,
+                        body: _,
+                    } => todo!(),
                     _ => {
                         return Err(RuntimeError::NotCallable {
                             typ: c.as_ref().to_string(),

@@ -1,4 +1,8 @@
-use std::{borrow::Cow, collections::HashMap, fmt::Display};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    fmt::{Debug, Display},
+};
 
 use strum_macros::{AsRefStr, IntoStaticStr};
 
@@ -13,11 +17,6 @@ pub enum Value<'s> {
     String(Cow<'s, str>),
     Boolean(bool),
     Nil,
-    NativeFunction {
-        name: &'static str,
-        f: fn(&[Value<'s>]) -> Value<'s>,
-        arity: u8,
-    },
 }
 
 impl<'s> From<&TokenType<'s>> for Value<'s> {
@@ -50,13 +49,11 @@ impl Display for Value<'_> {
             f,
             "{}",
             match self {
-                Value::Object(_) => "object".to_string(), // TODO: implement better object display
+                Value::Object(_) => "<object>".to_string(), // TODO: implement better object display
                 Value::Number(value) => value.to_string(),
                 Value::String(value) => value.to_string(),
                 Value::Boolean(value) => value.to_string(),
                 Value::Nil => "nil".to_string(),
-                Value::NativeFunction { name, f: _, arity } =>
-                    format!("<native fn {name}/{arity}>"),
             }
         )
     }
