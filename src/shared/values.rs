@@ -13,6 +13,10 @@ pub enum Value<'s> {
     String(Cow<'s, str>),
     Boolean(bool),
     Nil,
+    NativeFunction {
+        name: &'static str,
+        f: fn() -> Value<'s>,
+    },
 }
 
 impl<'s> From<&TokenType<'s>> for Value<'s> {
@@ -50,6 +54,7 @@ impl Display for Value<'_> {
                 Value::String(value) => value.to_string(),
                 Value::Boolean(value) => value.to_string(),
                 Value::Nil => "nil".to_string(),
+                Value::NativeFunction { name, f: _ } => format!("<native fn {}>", name),
             }
         )
     }

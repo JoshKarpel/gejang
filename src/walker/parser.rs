@@ -473,41 +473,29 @@ where
     fn call(&mut self) -> ParserExprResult<'s> {
         let mut expr = self.primary()?;
 
-        loop {
-            if self
+        while self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::LeftParen))
+            .is_some()
+        {
+            let mut args = vec![];
+
+            while self
                 .tokens
-                .next_if(|t| matches!(t.typ, TokenType::Comma))
-                .is_some()
+                .peek()
+                .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
             {
-                let mut args = vec![];
-
-                if self
-                    .tokens
-                    .peek()
-                    .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
-                {
-                    loop {
-                        args.push(self.expression()?);
-                        if !self
-                            .tokens
-                            .next_if(|t| !matches!(t.typ, TokenType::Comma))
-                            .is_some()
-                        {
-                            break;
-                        }
-                    }
-                }
-
-                self.require_token(TokenType::RightParen)?;
-
-                expr = Expr::Call {
-                    callee: Box::new(expr),
-                    // paren,  // trouble with multiple mutable borrows here
-                    args,
-                };
-            } else {
-                break;
+                args.push(self.expression()?);
+                self.require_token(TokenType::Comma)?;
             }
+
+            self.require_token(TokenType::RightParen)?;
+
+            expr = Expr::Call {
+                callee: Box::new(expr),
+                // paren,  // trouble with multiple mutable borrows here
+                args,
+            };
         }
 
         Ok(expr)
@@ -618,6 +606,16 @@ mod tests {
             }),
         }),
     }))]
+    #[case("clock()", Ok(Expr::Call {
+        callee: Box::new(Expr::Variable {
+            name: &Token {
+                typ: TokenType::Identifier("clock"),
+                lexeme: "clock",
+                line: 0,
+            },
+        }),
+        args: vec![],
+    }))]
     #[case("(1 + 2", Err(ParserError::UnexpectedEndOfInput))]
     #[case("(1 + 2 foo", Err(ParserError::UnexpectedToken {
         expected: TokenType::RightParen,
@@ -627,6 +625,7 @@ mod tests {
             line: 0,
         },
     }))]
+
     fn test_parse(#[case] source: &str, #[case] expected: ParserExprResult) {
         let tokens: Vec<Token> = scan(source).try_collect().unwrap();
         let mut parser = Parser::from(tokens.iter());

@@ -12,6 +12,8 @@ pub enum RuntimeError {
     PrintFailed,
     #[error("Undefined variable {name}")]
     UndefinedVariable { name: String },
+    #[error("Value of type {typ} is not callable")]
+    NotCallable { typ: String },
 }
 
 pub type InterpretResult = Result<(), RuntimeError>;
