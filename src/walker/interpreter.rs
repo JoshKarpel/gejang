@@ -29,7 +29,6 @@ impl<'s> Environment<'s> {
             Cow::from("clock"),
             Value::NativeFunction {
                 name: "clock",
-
                 f: || {
                     let now = SystemTime::now();
                     Value::Number(
@@ -38,6 +37,7 @@ impl<'s> Environment<'s> {
                             .as_secs_f64(),
                     )
                 },
+                arity: 0,
             },
         );
 
@@ -235,11 +235,24 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             Expr::Call { callee, args } => {
                 let c = self.evaluate(callee)?;
 
-                let _a: Result<Vec<Value>, RuntimeError> =
-                    args.iter().map(|arg| self.evaluate(arg)).collect();
+                let a = args
+                    .iter()
+                    .map(|arg| self.evaluate(arg))
+                    .collect::<Result<Vec<Value>, RuntimeError>>()?;
+
+                let num_args = a.len();
 
                 match c {
-                    Value::NativeFunction { name: _, f } => f(),
+                    Value::NativeFunction { name: _, f, arity } => {
+                        if num_args != arity as usize {
+                            return Err(RuntimeError::WrongNumberOfArgs {
+                                arity,
+                                got: num_args,
+                            });
+                        }
+
+                        f()
+                    }
                     _ => {
                         return Err(RuntimeError::NotCallable {
                             typ: c.as_ref().to_string(),

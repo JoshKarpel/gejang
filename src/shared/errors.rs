@@ -14,6 +14,8 @@ pub enum RuntimeError {
     UndefinedVariable { name: String },
     #[error("Value of type {typ} is not callable")]
     NotCallable { typ: String },
+    #[error("Wrong number of arguments: expected {arity}, got {got}")]
+    WrongNumberOfArgs { arity: u8, got: usize },
 }
 
 pub type InterpretResult = Result<(), RuntimeError>;

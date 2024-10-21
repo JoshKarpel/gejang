@@ -16,6 +16,7 @@ pub enum Value<'s> {
     NativeFunction {
         name: &'static str,
         f: fn() -> Value<'s>,
+        arity: u8,
     },
 }
 
@@ -54,7 +55,8 @@ impl Display for Value<'_> {
                 Value::String(value) => value.to_string(),
                 Value::Boolean(value) => value.to_string(),
                 Value::Nil => "nil".to_string(),
-                Value::NativeFunction { name, f: _ } => format!("<native fn {}>", name),
+                Value::NativeFunction { name, f: _, arity } =>
+                    format!("<native fn {name}/{arity}>"),
             }
         )
     }
