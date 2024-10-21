@@ -104,6 +104,9 @@ pub enum Stmt<'s> {
     Print {
         expr: BoxedExpr<'s>,
     },
+    Return {
+        value: Option<BoxedExpr<'s>>,
+    },
     Var {
         name: RefToken<'s>,
         initializer: Option<BoxedExpr<'s>>,
@@ -147,6 +150,12 @@ impl Display for Stmt<'_> {
                 }
                 Stmt::Print { expr } => {
                     format!("(print {expr})")
+                }
+                Stmt::Return { value } => {
+                    match value {
+                        Some(v) => format!("(return {v})"),
+                        None => "(return)".to_string(),
+                    }
                 }
                 Stmt::Var { name, initializer } => {
                     if let Some(init) = initializer {

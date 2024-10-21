@@ -20,7 +20,7 @@ use crate::{
 };
 
 #[derive(Error, Clone, Debug, PartialEq)]
-pub enum RuntimeError {
+pub enum RuntimeError<'s> {
     #[error("{msg}")]
     Unimplemented { msg: String },
     #[error("Print failed")]
@@ -31,10 +31,12 @@ pub enum RuntimeError {
     NotCallable { typ: String },
     #[error("Wrong number of arguments: expected {arity}, got {got}")]
     WrongNumberOfArgs { arity: usize, got: usize },
+    #[error("Returning {value}")]
+    Return { value: Value<'s> },
 }
 
-pub type InterpretResult = Result<(), RuntimeError>;
-pub type EvaluationResult<'s> = Result<Value<'s>, RuntimeError>;
+pub type InterpretResult<'s> = Result<(), RuntimeError<'s>>;
+pub type EvaluationResult<'s> = Result<Value<'s>, RuntimeError<'s>>;
 
 #[derive(Debug, Default)]
 struct Environment<'s> {
@@ -148,7 +150,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             })
     }
 
-    pub fn interpret(&'s self, statements: &'s [Stmt<'s>]) -> InterpretResult {
+    pub fn interpret(&'s self, statements: &'s [Stmt<'s>]) -> InterpretResult<'s> {
         for stmt in statements {
             self.execute(stmt)?;
         }
@@ -156,7 +158,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
         Ok(())
     }
 
-    pub fn execute(&'s self, stmt: &'s Stmt<'s>) -> InterpretResult {
+    pub fn execute(&'s self, stmt: &'s Stmt<'s>) -> InterpretResult<'s> {
         match stmt {
             Stmt::Block { stmts } => {
                 self.push_env();
@@ -205,6 +207,15 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 while self.evaluate(condition)?.is_truthy() {
                     self.execute(body)?
                 }
+            }
+            Stmt::Return { value } => {
+                let v = if let Some(e) = value {
+                    self.evaluate(e)?
+                } else {
+                    Value::Nil
+                };
+
+                return Err(RuntimeError::Return { value: v });
             }
         };
 
@@ -290,7 +301,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                 let num_args = a.len();
 
-                match c {
+                let r = match c {
                     Value::NativeFunction { name: _, f, arity } => {
                         if num_args != arity {
                             return Err(RuntimeError::WrongNumberOfArgs {
@@ -299,7 +310,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                             });
                         }
 
-                        f(&a)
+                        Ok(f(&a))
                     }
                     Value::Function {
                         name: _,
@@ -320,17 +331,21 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                             self.env_define_from_str(param, arg.clone()) // TODO another clone
                         });
 
-                        self.interpret(body)?;
+                        let rv = self.interpret(body);
 
-                        self.pop_env();
+                        self.pop_env(); // must pop the env whether we succeeded or failed, to handle returns
 
-                        Value::Nil // TODO: return values!
+                        rv.map(|_| Value::Nil)
                     }
-                    _ => {
-                        return Err(RuntimeError::NotCallable {
-                            typ: c.as_ref().to_string(),
-                        })
-                    }
+                    _ => Err(RuntimeError::NotCallable {
+                        typ: c.as_ref().to_string(),
+                    }),
+                };
+
+                match r {
+                    Ok(v) => v,
+                    Err(RuntimeError::Return { value }) => value,
+                    err => return err,
                 }
             }
         })

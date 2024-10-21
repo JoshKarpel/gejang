@@ -169,6 +169,7 @@ where
                     | TokenType::If
                     | TokenType::While
                     | TokenType::Fun
+                    | TokenType::Return
             )
         }) {
             match token.typ {
@@ -178,6 +179,7 @@ where
                 TokenType::If => self.if_statement(),
                 TokenType::While => self.while_statement(),
                 TokenType::Fun => self.function(),
+                TokenType::Return => self.return_statement(),
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {
@@ -364,6 +366,22 @@ where
         self.require_token(TokenType::RightBrace)?;
 
         Ok(Stmt::Function { name, params, body })
+    }
+
+    fn return_statement(&mut self) -> ParserStmtResult<'s> {
+        let value = if self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::Semicolon))
+        {
+            Some(Box::new(self.expression()?))
+        } else {
+            None
+        };
+
+        self.require_token(TokenType::Semicolon)?;
+
+        Ok(Stmt::Return { value })
     }
 
     fn expression_statement(&mut self) -> ParserStmtResult<'s> {

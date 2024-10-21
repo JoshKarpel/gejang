@@ -193,6 +193,16 @@ fun count(n) {
 print count;"#,
         "<fun count/1>\n"
     )]
+    #[case(
+        r#"
+fun fib(n) {
+  if (n <= 1) return n;
+  return fib(n - 2) + fib(n - 1);
+}
+
+print(fib(10));"#,
+        "55\n"
+    )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());
