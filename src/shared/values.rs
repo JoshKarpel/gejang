@@ -15,7 +15,7 @@ pub enum Value<'s> {
     Nil,
     NativeFunction {
         name: &'static str,
-        f: fn() -> Value<'s>,
+        f: fn(&[Value<'s>]) -> Value<'s>,
         arity: u8,
     },
 }

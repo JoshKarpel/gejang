@@ -171,6 +171,7 @@ var a = 1;
     #[case("for (var i = 0; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]
     #[case("var i = 0; for (; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]
     #[case("print clock;", "<native fn clock/0>\n")]
+    #[case("print tsp2cup(15);", "0.3125\n")]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());

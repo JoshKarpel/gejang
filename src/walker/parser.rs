@@ -486,7 +486,13 @@ where
                 .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
             {
                 args.push(self.expression()?);
-                self.require_token(TokenType::Comma)?;
+                if !self
+                    .tokens
+                    .peek()
+                    .is_some_and(|t| matches!(t.typ, TokenType::Comma))
+                {
+                    break;
+                }
             }
 
             self.require_token(TokenType::RightParen)?;
@@ -615,6 +621,22 @@ mod tests {
             },
         }),
         args: vec![],
+    }))]
+    #[case("tsp2cup(15)", Ok(Expr::Call {
+        callee: Box::new(Expr::Variable {
+            name: &Token {
+                typ: TokenType::Identifier("tsp2cup"),
+                lexeme: "tsp2cup",
+                line: 0,
+            },
+        }),
+        args: vec![Expr::Literal {
+            value: &Token {
+                typ: TokenType::Number(15.0),
+                lexeme: "15",
+                line: 0,
+            }}
+        ],
     }))]
     #[case("(1 + 2", Err(ParserError::UnexpectedEndOfInput))]
     #[case("(1 + 2 foo", Err(ParserError::UnexpectedToken {
