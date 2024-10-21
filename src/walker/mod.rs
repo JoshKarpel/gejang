@@ -203,6 +203,23 @@ fun fib(n) {
 print(fib(10));"#,
         "55\n"
     )]
+    #[case(
+        r#"
+fun makeCounter() {
+  var i = 0;
+  fun count() {
+    i = i + 1;
+    print i;
+  }
+
+  return count;
+}
+
+var counter = makeCounter();
+counter();
+counter();"#,
+        "1\n2\n"
+    )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());

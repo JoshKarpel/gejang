@@ -6,7 +6,10 @@ use std::{
 
 use strum_macros::{AsRefStr, IntoStaticStr};
 
-use crate::{shared::scanner::TokenType, walker::ast::Stmt};
+use crate::{
+    shared::scanner::TokenType,
+    walker::{ast::Stmt, interpreter::EnvironmentStack},
+};
 
 #[derive(Debug, Clone, PartialEq, AsRefStr, IntoStaticStr)]
 pub enum Value<'s> {
@@ -26,6 +29,7 @@ pub enum Value<'s> {
         name: &'s str,
         params: Vec<&'s str>,
         body: &'s Vec<Stmt<'s>>,
+        closure: EnvironmentStack<'s>,
     },
 }
 
@@ -64,13 +68,8 @@ impl Display for Value<'_> {
                 Value::String(value) => value.to_string(),
                 Value::Boolean(value) => value.to_string(),
                 Value::Nil => "nil".to_string(),
-                Value::NativeFunction { name, f: _, arity } =>
-                    format!("<native fun {name}/{arity}>"),
-                Value::Function {
-                    name,
-                    params,
-                    body: _,
-                } => format!("<fun {}/{}>", name, params.len()),
+                Value::NativeFunction { name, arity, .. } => format!("<native fun {name}/{arity}>"),
+                Value::Function { name, params, .. } => format!("<fun {}/{}>", name, params.len()),
             }
         )
     }

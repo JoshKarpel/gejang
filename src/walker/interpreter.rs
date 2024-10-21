@@ -1,18 +1,16 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, LinkedList},
     io::{Read, Write},
+    rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use thiserror::Error;
 
 use crate::{
-    shared::{
-        scanner::{Token, TokenType},
-        streams::Streams,
-    },
+    shared::{scanner::TokenType, streams::Streams},
     walker::{
         ast::{Expr, Stmt},
         values::Value,
@@ -38,7 +36,7 @@ pub enum RuntimeError<'s> {
 pub type InterpretResult<'s> = Result<(), RuntimeError<'s>>;
 pub type EvaluationResult<'s> = Result<Value<'s>, RuntimeError<'s>>;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 struct Environment<'s> {
     values: HashMap<Cow<'s, str>, Value<'s>>,
 }
@@ -82,72 +80,75 @@ impl<'s> Environment<'s> {
         self.values.insert(name, value);
     }
 
-    fn get(&self, name: &Token<'s>) -> Option<Value<'s>> {
-        self.values.get(name.lexeme).cloned() // TODO: clone means we can't mutate objects!
+    fn get(&self, name: &Cow<'s, str>) -> Option<Value<'s>> {
+        self.values.get(name).cloned() // TODO: clone means we can't mutate objects!
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnvironmentStack<'s>(LinkedList<Rc<RefCell<Environment<'s>>>>);
+
+impl<'s> EnvironmentStack<'s> {
+    fn global() -> Self {
+        let mut ll = LinkedList::new();
+        ll.push_back(Rc::new(RefCell::new(Environment::global())));
+        EnvironmentStack(ll)
+    }
+
+    fn push(&mut self) {
+        self.0
+            .push_back(Rc::new(RefCell::new(Environment::default())))
+    }
+
+    fn pop(&mut self) {
+        self.0.pop_back();
+    }
+
+    fn define(&self, name: Cow<'s, str>, value: Value<'s>) {
+        self.0
+            .back()
+            .expect("Empty environment stack")
+            .borrow_mut()
+            .define(name, value);
+    }
+
+    fn assign(&self, name: &Cow<'s, str>, value: Value<'s>) -> EvaluationResult<'s> {
+        self.0
+            .iter()
+            .rev()
+            .find(|e| e.borrow().get(name).is_some())
+            .map(|e| {
+                e.borrow_mut().define(name.clone(), value.clone());
+                value
+            })
+            .ok_or_else(|| RuntimeError::UndefinedVariable {
+                name: name.to_string(),
+            })
+    }
+
+    fn get(&self, name: &Cow<'s, str>) -> EvaluationResult<'s> {
+        self.0
+            .iter()
+            .rev()
+            .find_map(|e| e.borrow().get(name))
+            .ok_or_else(|| RuntimeError::UndefinedVariable {
+                name: name.to_string(),
+            })
     }
 }
 
 #[derive(Debug)]
 pub struct Interpreter<'s, 'io, I: Read, O: Write, E: Write> {
-    environments: RefCell<Vec<Environment<'s>>>,
+    environments: RefCell<EnvironmentStack<'s>>,
     streams: &'io RefCell<Streams<I, O, E>>,
 }
 
 impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
     pub fn new(streams: &'io RefCell<Streams<I, O, E>>) -> Self {
         Self {
-            environments: RefCell::new(vec![Environment::global()]),
+            environments: RefCell::new(EnvironmentStack::global()),
             streams,
         }
-    }
-
-    fn push_env(&self) {
-        self.environments.borrow_mut().push(Environment::default());
-    }
-
-    fn pop_env(&self) {
-        self.environments.borrow_mut().pop();
-    }
-
-    fn env_define(&self, name: &Token<'s>, value: Value<'s>) {
-        self.environments
-            .borrow_mut()
-            .last_mut()
-            .expect("Unexpectedly empty environment stack!")
-            .define(name.lexeme.into(), value);
-    }
-
-    fn env_define_from_str(&self, name: &'s str, value: Value<'s>) {
-        self.environments
-            .borrow_mut()
-            .last_mut()
-            .expect("Unexpectedly empty environment stack!")
-            .define(name.into(), value);
-    }
-
-    fn env_assign(&self, name: &Token<'s>, value: Value<'s>) -> EvaluationResult<'s> {
-        self.environments
-            .borrow_mut()
-            .iter_mut()
-            .find(|e| e.get(name).is_some())
-            .map(|e| {
-                e.define(name.lexeme.into(), value.clone());
-                value
-            })
-            .ok_or_else(|| RuntimeError::UndefinedVariable {
-                name: name.lexeme.to_string(),
-            })
-    }
-
-    fn env_get(&self, name: &Token<'s>) -> EvaluationResult<'s> {
-        self.environments
-            .borrow()
-            .iter()
-            .rev()
-            .find_map(|e| e.get(name))
-            .ok_or_else(|| RuntimeError::UndefinedVariable {
-                name: name.lexeme.to_string(),
-            })
     }
 
     pub fn interpret(&'s self, statements: &'s [Stmt<'s>]) -> InterpretResult<'s> {
@@ -161,21 +162,22 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
     pub fn execute(&'s self, stmt: &'s Stmt<'s>) -> InterpretResult<'s> {
         match stmt {
             Stmt::Block { stmts } => {
-                self.push_env();
+                self.environments.borrow_mut().push();
                 for stmt in stmts {
                     self.execute(stmt)?
                 }
-                self.pop_env();
+                self.environments.borrow_mut().pop();
             }
             Stmt::Expression { expr } => {
                 self.evaluate(expr)?;
             }
-            Stmt::Function { name, params, body } => self.env_define(
-                name,
+            Stmt::Function { name, params, body } => self.environments.borrow().define(
+                Cow::from(name.lexeme),
                 Value::Function {
                     name: name.lexeme,
                     params: params.iter().map(|p| p.lexeme).collect(),
                     body,
+                    closure: self.environments.borrow().clone(),
                 },
             ),
             Stmt::If {
@@ -201,7 +203,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     Value::Nil
                 };
 
-                self.env_define(name, ival);
+                self.environments.borrow().define(name.lexeme.into(), ival);
             }
             Stmt::While { condition, body } => {
                 while self.evaluate(condition)?.is_truthy() {
@@ -289,8 +291,11 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     _ => unreachable!("Unexpected logical result/operator"),
                 };
             }
-            Expr::Variable { name } => self.env_get(name)?,
-            Expr::Assign { name, value } => self.env_assign(name, self.evaluate(value)?)?,
+            Expr::Variable { name } => self.environments.borrow().get(&Cow::from(name.lexeme))?,
+            Expr::Assign { name, value } => self
+                .environments
+                .borrow()
+                .assign(&Cow::from(name.lexeme), self.evaluate(value)?)?,
             Expr::Call { callee, args } => {
                 let c = self.evaluate(callee)?;
 
@@ -316,6 +321,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                         name: _,
                         params,
                         body,
+                        closure,
                     } => {
                         let num_params = params.len();
                         if num_args != num_params {
@@ -325,15 +331,21 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                             });
                         };
 
-                        self.push_env(); // TODO: this is wrong, at this point functions should execute in global scope, then definition-scope with closures
+                        let old_env = self.environments.replace(closure);
 
-                        a.iter().zip(params.iter()).for_each(|(arg, param)| {
-                            self.env_define_from_str(param, arg.clone()) // TODO another clone
+                        self.environments.borrow_mut().push();
+
+                        a.iter().zip(params.iter()).for_each(|(arg, &param)| {
+                            self.environments
+                                .borrow()
+                                .define(Cow::from(param), arg.clone()) // TODO another clone
                         });
 
                         let rv = self.interpret(body);
 
-                        self.pop_env(); // must pop the env whether we succeeded or failed, to handle returns
+                        self.environments.borrow_mut().pop(); // must pop the env whether we succeeded or failed, to handle returns
+
+                        self.environments.replace(old_env);
 
                         rv.map(|_| Value::Nil)
                     }
