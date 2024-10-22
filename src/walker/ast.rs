@@ -88,6 +88,7 @@ pub enum Stmt<'s> {
     Block {
         stmts: Vec<Stmt<'s>>,
     },
+    Break,
     Expression {
         expr: BoxedExpr<'s>,
     },
@@ -167,6 +168,7 @@ impl Display for Stmt<'_> {
                 Stmt::While { condition, body } => {
                     format!("(while {} {})", condition, body)
                 }
+                Stmt::Break => "(break)".into(),
             }
         )
     }
