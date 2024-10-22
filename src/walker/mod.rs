@@ -34,7 +34,7 @@ pub fn repl() -> Result<()> {
     let streams = RefCell::new(Streams::new());
 
     loop {
-        writeln!(
+        write!(
             streams.borrow_mut().output,
             "{}",
             if !error { prefix } else { bad_prefix }
@@ -168,6 +168,12 @@ var a = 1;
     #[case("print false and \"yes\";", "false\n")]
     #[case("var i = 0; while (i < 3) {print i; i = i + 1;}", "0\n1\n2\n")]
     #[case("for (var i = 0; i < 3; i = i + 1) print i;", "0\n1\n2\n")]
+    #[case("for (var i = 0; i < 3; i = i + 1) {print i;}", "0\n1\n2\n")]
+    #[case("for (var i = 0; i < 3; i = i + 1) {print i; break;}", "0\n")]
+    #[case(
+        "for (var i = 0; i < 3; i = i + 1) {print i; if (i >= 1) break;}",
+        "0\n1\n"
+    )]
     #[case("var i = 0; for (; i < 3; i = i + 1) print i;", "0\n1\n2\n")]
     #[case("for (var i = 0; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]
     #[case("var i = 0; for (; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]

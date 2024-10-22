@@ -170,6 +170,7 @@ where
                     | TokenType::While
                     | TokenType::Fun
                     | TokenType::Return
+                    | TokenType::Break
             )
         }) {
             match token.typ {
@@ -180,6 +181,10 @@ where
                 TokenType::While => self.while_statement(),
                 TokenType::Fun => self.function(),
                 TokenType::Return => self.return_statement(),
+                TokenType::Break => {
+                    self.require_token(TokenType::Semicolon)?;
+                    Ok(Stmt::Break)
+                }
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {

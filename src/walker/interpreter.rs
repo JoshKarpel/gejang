@@ -31,6 +31,8 @@ pub enum RuntimeError<'s> {
     WrongNumberOfArgs { arity: usize, got: usize },
     #[error("Returning {value}")]
     Return { value: Value<'s> },
+    #[error("Breaking loop")]
+    Break,
 }
 
 pub type InterpretResult<'s> = Result<(), RuntimeError<'s>>;
@@ -204,7 +206,12 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             }
             Stmt::While { condition, body } => {
                 while self.evaluate(condition)?.is_truthy() {
-                    self.execute(body)?
+                    let r = self.execute(body);
+                    if let Err(RuntimeError::Break) = r {
+                        break;
+                    } else if let e @ Err(_) = r {
+                        return e;
+                    }
                 }
             }
             Stmt::Return { value } => {
@@ -216,6 +223,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                 return Err(RuntimeError::Return { value: v });
             }
+            Stmt::Break => return Err(RuntimeError::Break),
         };
 
         Ok(())

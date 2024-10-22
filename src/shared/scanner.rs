@@ -27,6 +27,7 @@ pub enum TokenType<'s> {
     String(&'s str),
     Number(f64),
     And,
+    Break,
     Class,
     Else,
     False,
@@ -74,6 +75,7 @@ impl Display for TokenType<'_> {
                 TokenType::String(_) => "a string",
                 TokenType::Number(_) => "a number",
                 TokenType::And => "and",
+                TokenType::Break => "break",
                 TokenType::Class => "class",
                 TokenType::Else => "else",
                 TokenType::False => "false",
@@ -316,6 +318,7 @@ impl<'s> Iterator for Scanner<'s> {
 
                     match self.lexeme() {
                         "and" => self.make_token(TokenType::And),
+                        "break" => self.make_token(TokenType::Break),
                         "class" => self.make_token(TokenType::Class),
                         "else" => self.make_token(TokenType::Else),
                         "false" => self.make_token(TokenType::False),
