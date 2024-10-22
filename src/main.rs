@@ -38,6 +38,8 @@ struct TreeWalkerArgs {
 enum TreeWalkerCommands {
     /// Execute a script.
     Run { script: Option<PathBuf> },
+    /// Execute a script passed directly as a string.
+    Exec { script: String },
 }
 
 #[derive(Args, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -50,6 +52,8 @@ struct ByteCodeArgs {
 enum ByteCodeCommands {
     /// Execute a script.
     Run { script: Option<PathBuf> },
+    /// Execute a script passed directly as a string.
+    Exec { script: String },
 }
 
 fn main() -> Result<()> {
@@ -59,20 +63,22 @@ fn main() -> Result<()> {
         Commands::TreeWalker(args) => match args.command {
             TreeWalkerCommands::Run { script: s } => {
                 if let Some(path) = s {
-                    walker::script(&path)
+                    walker::exec(&std::fs::read_to_string(&path)?)
                 } else {
                     walker::repl()
                 }
             }
+            TreeWalkerCommands::Exec { script: s } => walker::exec(&s),
         },
         Commands::Bytecode(args) => match args.command {
             ByteCodeCommands::Run { script: s } => {
                 if let Some(path) = s {
-                    bytecode::script(&path)
+                    bytecode::exec(&std::fs::read_to_string(&path)?)
                 } else {
                     bytecode::repl()
                 }
             }
+            ByteCodeCommands::Exec { script: s } => bytecode::exec(&s),
         },
     }
 }

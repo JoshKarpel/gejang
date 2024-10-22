@@ -1,26 +1,46 @@
 use std::{fmt, fmt::Display};
 
+use itertools::Itertools;
+
 use crate::shared::scanner::Token;
 
-type E<'s> = Box<Expr<'s>>;
-type T<'s> = &'s Token<'s>;
+type BoxedExpr<'s> = Box<Expr<'s>>;
+type BoxedStmt<'s> = Box<Stmt<'s>>;
+type RefToken<'s> = &'s Token<'s>;
 
 #[derive(Debug, PartialEq)]
 pub enum Expr<'s> {
+    Assign {
+        name: RefToken<'s>,
+        value: BoxedExpr<'s>,
+    },
     Binary {
-        left: E<'s>,
-        op: T<'s>,
-        right: E<'s>,
+        left: BoxedExpr<'s>,
+        op: RefToken<'s>,
+        right: BoxedExpr<'s>,
+    },
+    Call {
+        callee: BoxedExpr<'s>,
+        // paren: RefToken<'s>,
+        args: Vec<Expr<'s>>,
     },
     Unary {
-        op: T<'s>,
-        right: E<'s>,
+        op: RefToken<'s>,
+        right: BoxedExpr<'s>,
     },
     Grouping {
-        expr: E<'s>,
+        expr: BoxedExpr<'s>,
     },
     Literal {
-        token: T<'s>,
+        value: RefToken<'s>,
+    },
+    Logical {
+        left: BoxedExpr<'s>,
+        op: RefToken<'s>,
+        right: BoxedExpr<'s>,
+    },
+    Variable {
+        name: RefToken<'s>,
     },
 }
 
@@ -30,8 +50,22 @@ impl Display for Expr<'_> {
             f,
             "{}",
             match self {
+                Expr::Assign { name, value } => {
+                    format!("(assign {} {})", name.lexeme, value)
+                }
                 Expr::Binary { left, op, right } => {
                     format!("({} {} {})", op.lexeme, left, right)
+                }
+                Expr::Call {
+                    callee,
+                    // paren,
+                    args,
+                } => {
+                    format!(
+                        "({} {})",
+                        callee,
+                        args.iter().map(|a| a.to_string()).join(", ")
+                    )
                 }
                 Expr::Unary { op, right } => {
                     format!("({} {})", op.lexeme, right)
@@ -39,7 +73,100 @@ impl Display for Expr<'_> {
                 Expr::Grouping { expr } => {
                     format!("(grouping {})", expr)
                 }
-                Expr::Literal { token } => token.lexeme.into(),
+                Expr::Literal { value: token } => token.lexeme.into(),
+                Expr::Logical { left, op, right } => {
+                    format!("({} {} {}", op.lexeme, left, right)
+                }
+                Expr::Variable { name } => name.lexeme.into(),
+            }
+        )
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Stmt<'s> {
+    Block {
+        stmts: Vec<Stmt<'s>>,
+    },
+    Expression {
+        expr: BoxedExpr<'s>,
+    },
+    Function {
+        name: RefToken<'s>,
+        params: Vec<RefToken<'s>>,
+        body: Vec<Stmt<'s>>,
+    },
+    If {
+        condition: BoxedExpr<'s>,
+        then: BoxedStmt<'s>,
+        els: Option<BoxedStmt<'s>>,
+    },
+    Print {
+        expr: BoxedExpr<'s>,
+    },
+    Return {
+        value: Option<BoxedExpr<'s>>,
+    },
+    Var {
+        name: RefToken<'s>,
+        initializer: Option<BoxedExpr<'s>>,
+    },
+    While {
+        condition: BoxedExpr<'s>,
+        body: BoxedStmt<'s>,
+    },
+}
+
+impl Display for Stmt<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Stmt::Block { stmts } => {
+                    format!("(block {}", stmts.iter().map(|s| s.to_string()).join(" "))
+                }
+                Stmt::Expression { expr } => {
+                    format!("(expression {expr})")
+                }
+                Stmt::Function { name, params, body } => {
+                    format!(
+                        "(function {} ({}) ({})",
+                        name.lexeme,
+                        params.iter().map(|p| p.lexeme).join(" "),
+                        body.iter().map(|s| s.to_string()).join(" ")
+                    )
+                }
+                Stmt::If {
+                    condition,
+                    then,
+                    els,
+                } => {
+                    if let Some(e) = els {
+                        format!("(if {} then {} else {}", condition, then, e)
+                    } else {
+                        format!("(if {} then {}", condition, then)
+                    }
+                }
+                Stmt::Print { expr } => {
+                    format!("(print {expr})")
+                }
+                Stmt::Return { value } => {
+                    match value {
+                        Some(v) => format!("(return {v})"),
+                        None => "(return)".to_string(),
+                    }
+                }
+                Stmt::Var { name, initializer } => {
+                    if let Some(init) = initializer {
+                        format!("(var {} {init})", name.lexeme)
+                    } else {
+                        format!("(var {})", name.lexeme)
+                    }
+                }
+                Stmt::While { condition, body } => {
+                    format!("(while {} {})", condition, body)
+                }
             }
         )
     }
@@ -58,7 +185,7 @@ mod tests {
     #[case(
         Expr::Binary {
             left: Box::new(Expr::Literal {
-                token: &Token {
+                value: &Token {
                     typ: TokenType::Number(1.0),
                     lexeme: "1",
                     line: 0,
@@ -71,7 +198,7 @@ mod tests {
 
             },
             right: Box::new(Expr::Literal {
-                token: &Token {
+                value: &Token {
                     typ: TokenType::Number(2.0),
                     lexeme: "2",
                     line: 0,
@@ -91,7 +218,7 @@ mod tests {
 
                 },
                 right: Box::new(Expr::Literal {
-                    token: &Token {
+                    value: &Token {
                         typ: TokenType::Number(1.0),
                         lexeme: "1",
                         line: 0,
@@ -107,7 +234,7 @@ mod tests {
             },
             right: Box::new(Expr::Grouping {
                 expr: Box::new(Expr::Literal {
-                    token: &Token {
+                    value: &Token {
                         typ: TokenType::Number(2.0),
                         lexeme: "2",
                         line: 0,

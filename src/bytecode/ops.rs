@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use itertools::Itertools;
 use strum_macros::{AsRefStr, IntoStaticStr};
 
-use crate::shared::values::Value;
+use crate::bytecode::values::Value;
 
 #[derive(Debug, AsRefStr, IntoStaticStr)]
 pub enum OpCode {
@@ -26,7 +26,11 @@ pub struct Chunk<'s> {
 
 impl<'s> Chunk<'s> {
     #[allow(dead_code)]
-    pub fn new(code: Vec<OpCode>, constants: Vec<Value<'s>>, lines: Vec<usize>) -> Result<Chunk> {
+    pub fn new(
+        code: Vec<OpCode>,
+        constants: Vec<Value<'s>>,
+        lines: Vec<usize>,
+    ) -> Result<Chunk<'s>> {
         if code.len() != lines.len() {
             bail!("Chunk code and lines must have same length, but they did not: len(code)={}, len(lines)={}", code.len(), lines.len())
         }
@@ -83,7 +87,7 @@ impl<'s> Chunk<'s> {
     }
 }
 
-impl<'s> Display for Chunk<'s> {
+impl Display for Chunk<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
