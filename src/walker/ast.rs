@@ -19,6 +19,11 @@ pub enum Expr<'s> {
         op: RefToken<'s>,
         right: BoxedExpr<'s>,
     },
+    Call {
+        callee: BoxedExpr<'s>,
+        // paren: RefToken<'s>,
+        args: Vec<Expr<'s>>,
+    },
     Unary {
         op: RefToken<'s>,
         right: BoxedExpr<'s>,
@@ -51,6 +56,17 @@ impl Display for Expr<'_> {
                 Expr::Binary { left, op, right } => {
                     format!("({} {} {})", op.lexeme, left, right)
                 }
+                Expr::Call {
+                    callee,
+                    // paren,
+                    args,
+                } => {
+                    format!(
+                        "({} {})",
+                        callee,
+                        args.iter().map(|a| a.to_string()).join(", ")
+                    )
+                }
                 Expr::Unary { op, right } => {
                     format!("({} {})", op.lexeme, right)
                 }
@@ -75,6 +91,11 @@ pub enum Stmt<'s> {
     Expression {
         expr: BoxedExpr<'s>,
     },
+    Function {
+        name: RefToken<'s>,
+        params: Vec<RefToken<'s>>,
+        body: Vec<Stmt<'s>>,
+    },
     If {
         condition: BoxedExpr<'s>,
         then: BoxedStmt<'s>,
@@ -82,6 +103,9 @@ pub enum Stmt<'s> {
     },
     Print {
         expr: BoxedExpr<'s>,
+    },
+    Return {
+        value: Option<BoxedExpr<'s>>,
     },
     Var {
         name: RefToken<'s>,
@@ -105,6 +129,14 @@ impl Display for Stmt<'_> {
                 Stmt::Expression { expr } => {
                     format!("(expression {expr})")
                 }
+                Stmt::Function { name, params, body } => {
+                    format!(
+                        "(function {} ({}) ({})",
+                        name.lexeme,
+                        params.iter().map(|p| p.lexeme).join(" "),
+                        body.iter().map(|s| s.to_string()).join(" ")
+                    )
+                }
                 Stmt::If {
                     condition,
                     then,
@@ -118,6 +150,12 @@ impl Display for Stmt<'_> {
                 }
                 Stmt::Print { expr } => {
                     format!("(print {expr})")
+                }
+                Stmt::Return { value } => {
+                    match value {
+                        Some(v) => format!("(return {v})"),
+                        None => "(return)".to_string(),
+                    }
                 }
                 Stmt::Var { name, initializer } => {
                     if let Some(init) = initializer {

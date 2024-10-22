@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use itertools::Itertools;
 use strum_macros::{AsRefStr, IntoStaticStr};
 
-use crate::shared::values::Value;
+use crate::bytecode::values::Value;
 
 #[derive(Debug, AsRefStr, IntoStaticStr)]
 pub enum OpCode {

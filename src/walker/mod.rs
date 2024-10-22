@@ -1,6 +1,7 @@
 mod ast;
 mod interpreter;
 mod parser;
+mod values;
 
 use std::{
     cell::RefCell,
@@ -170,6 +171,56 @@ var a = 1;
     #[case("var i = 0; for (; i < 3; i = i + 1) print i;", "0\n1\n2\n")]
     #[case("for (var i = 0; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]
     #[case("var i = 0; for (; i < 3;) {print i; i = i + 1;}", "0\n1\n2\n")]
+    #[case("print clock;", "<native fun clock/0>\n")]
+    #[case("print tsp2cup(15);", "0.3125\n")]
+    #[case(
+        r#"
+fun count(n) {
+  if (n > 1) count(n - 1);
+  print n;
+}
+
+count(3);"#,
+        "1\n2\n3\n"
+    )]
+    #[case(
+        r#"
+fun count(n) {
+  if (n > 1) count(n - 1);
+  print n;
+}
+
+print count;"#,
+        "<fun count/1>\n"
+    )]
+    #[case(
+        r#"
+fun fib(n) {
+  if (n <= 1) return n;
+  return fib(n - 2) + fib(n - 1);
+}
+
+print(fib(10));"#,
+        "55\n"
+    )]
+    #[case(
+        r#"
+fun makeCounter() {
+  var i = 0;
+  fun count() {
+    i = i + 1;
+    print i;
+  }
+
+  return count;
+}
+
+var counter = makeCounter();
+counter();
+counter();
+counter();"#,
+        "1\n2\n3\n"
+    )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());
@@ -178,5 +229,18 @@ var a = 1;
         println!("stderr:\n{}", streams.borrow().get_error().unwrap());
         r.unwrap();
         assert_eq!(streams.borrow().get_output().unwrap(), expected);
+    }
+
+    #[test]
+    fn test_clock() {
+        let source = "print clock();";
+        println!("source:\n{}", source);
+        let streams = RefCell::new(Streams::test());
+        let r = interpret(source, &streams);
+        println!("stdout:\n{}", streams.borrow().get_output().unwrap());
+        println!("stderr:\n{}", streams.borrow().get_error().unwrap());
+        r.unwrap();
+        // TODO: real assert here, for now just making sure it runs without errors
+        // assert!(streams.borrow().get_output().unwrap(), expected);
     }
 }

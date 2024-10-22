@@ -1,13 +1,21 @@
 use colored::Colorize;
 use itertools::Itertools;
+use thiserror::Error;
 
-use crate::{
-    bytecode::ops::{Chunk, OpCode},
-    shared::{
-        errors::{EvaluationResult, RuntimeError},
-        values::Value,
-    },
+use crate::bytecode::{
+    ops::{Chunk, OpCode},
+    values::Value,
 };
+
+#[derive(Error, Clone, Debug, PartialEq)]
+pub enum RuntimeError {
+    #[error("{msg}")]
+    Unimplemented { msg: String },
+    #[error("Invalid instruction pointer: {ip}")]
+    InvalidInstructionPointer { ip: usize },
+}
+
+pub type EvaluationResult<'s> = Result<Value<'s>, RuntimeError>;
 
 pub struct VirtualMachine<'s> {
     #[allow(dead_code)]

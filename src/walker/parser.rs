@@ -168,6 +168,8 @@ where
                     | TokenType::LeftBrace
                     | TokenType::If
                     | TokenType::While
+                    | TokenType::Fun
+                    | TokenType::Return
             )
         }) {
             match token.typ {
@@ -176,6 +178,8 @@ where
                 TokenType::LeftBrace => self.block(),
                 TokenType::If => self.if_statement(),
                 TokenType::While => self.while_statement(),
+                TokenType::Fun => self.function(),
+                TokenType::Return => self.return_statement(),
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {
@@ -303,6 +307,83 @@ where
         Ok(Stmt::While { condition, body })
     }
 
+    fn function(&mut self) -> ParserStmtResult<'s> {
+        let name = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+            .ok_or_else(|| ParserError::UnexpectedToken {
+                expected: TokenType::Identifier(""),
+                token: self
+                    .tokens
+                    .peek()
+                    .ok_or(ParserError::UnexpectedEndOfInput)
+                    .unwrap(), // TODO what?
+            })?;
+
+        self.require_token(TokenType::LeftParen)?;
+
+        let mut params = vec![];
+
+        while self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
+        {
+            params.push(
+                self.tokens
+                    .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+                    .ok_or_else(|| ParserError::UnexpectedToken {
+                        expected: TokenType::Identifier(""),
+                        token: self
+                            .tokens
+                            .peek()
+                            .ok_or(ParserError::UnexpectedEndOfInput)
+                            .unwrap(), // TODO what?
+                    })?,
+            );
+            if !self
+                .tokens
+                .peek()
+                .is_some_and(|t| matches!(t.typ, TokenType::Comma))
+            {
+                break;
+            }
+        }
+
+        self.require_token(TokenType::RightParen)?;
+
+        self.require_token(TokenType::LeftBrace)?;
+
+        let mut body = vec![];
+        while self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::RightBrace))
+        {
+            body.push(self.declaration()?);
+        }
+
+        self.require_token(TokenType::RightBrace)?;
+
+        Ok(Stmt::Function { name, params, body })
+    }
+
+    fn return_statement(&mut self) -> ParserStmtResult<'s> {
+        let value = if self
+            .tokens
+            .peek()
+            .is_some_and(|t| !matches!(t.typ, TokenType::Semicolon))
+        {
+            Some(Box::new(self.expression()?))
+        } else {
+            None
+        };
+
+        self.require_token(TokenType::Semicolon)?;
+
+        Ok(Stmt::Return { value })
+    }
+
     fn expression_statement(&mut self) -> ParserStmtResult<'s> {
         let expr = self.expression()?;
         self.require_token(TokenType::Semicolon)?;
@@ -311,20 +392,17 @@ where
         })
     }
 
-    fn require_token(&mut self, typ: TokenType<'s>) -> Result<(), ParserError<'s>> {
-        self.tokens
-            .next_if(|t| t.typ == typ)
-            .ok_or_else(|| {
-                self.tokens
-                    .peek()
-                    .map_or(ParserError::UnexpectedEndOfInput, |token| {
-                        ParserError::UnexpectedToken {
-                            expected: typ,
-                            token,
-                        }
-                    })
-            })
-            .map(|_| ())
+    fn require_token(&mut self, typ: TokenType<'s>) -> Result<&Token<'s>, ParserError<'s>> {
+        self.tokens.next_if(|t| t.typ == typ).ok_or_else(|| {
+            self.tokens
+                .peek()
+                .map_or(ParserError::UnexpectedEndOfInput, |token| {
+                    ParserError::UnexpectedToken {
+                        expected: typ,
+                        token,
+                    }
+                })
+        })
     }
 
     fn expression(&mut self) -> ParserExprResult<'s> {
@@ -470,7 +548,44 @@ where
             });
         }
 
-        self.primary()
+        self.call()
+    }
+
+    fn call(&mut self) -> ParserExprResult<'s> {
+        let mut expr = self.primary()?;
+
+        while self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::LeftParen))
+            .is_some()
+        {
+            let mut args = vec![];
+
+            while self
+                .tokens
+                .peek()
+                .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
+            {
+                args.push(self.expression()?);
+                if !self
+                    .tokens
+                    .peek()
+                    .is_some_and(|t| matches!(t.typ, TokenType::Comma))
+                {
+                    break;
+                }
+            }
+
+            self.require_token(TokenType::RightParen)?;
+
+            expr = Expr::Call {
+                callee: Box::new(expr),
+                // paren,  // trouble with multiple mutable borrows here
+                args,
+            };
+        }
+
+        Ok(expr)
     }
 
     fn primary(&mut self) -> ParserExprResult<'s> {
@@ -578,6 +693,32 @@ mod tests {
             }),
         }),
     }))]
+    #[case("clock()", Ok(Expr::Call {
+        callee: Box::new(Expr::Variable {
+            name: &Token {
+                typ: TokenType::Identifier("clock"),
+                lexeme: "clock",
+                line: 0,
+            },
+        }),
+        args: vec![],
+    }))]
+    #[case("tsp2cup(15)", Ok(Expr::Call {
+        callee: Box::new(Expr::Variable {
+            name: &Token {
+                typ: TokenType::Identifier("tsp2cup"),
+                lexeme: "tsp2cup",
+                line: 0,
+            },
+        }),
+        args: vec![Expr::Literal {
+            value: &Token {
+                typ: TokenType::Number(15.0),
+                lexeme: "15",
+                line: 0,
+            }}
+        ],
+    }))]
     #[case("(1 + 2", Err(ParserError::UnexpectedEndOfInput))]
     #[case("(1 + 2 foo", Err(ParserError::UnexpectedToken {
         expected: TokenType::RightParen,
@@ -587,6 +728,7 @@ mod tests {
             line: 0,
         },
     }))]
+
     fn test_parse(#[case] source: &str, #[case] expected: ParserExprResult) {
         let tokens: Vec<Token> = scan(source).try_collect().unwrap();
         let mut parser = Parser::from(tokens.iter());
