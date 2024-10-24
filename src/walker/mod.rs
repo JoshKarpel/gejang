@@ -227,6 +227,20 @@ counter();
 counter();"#,
         "1\n2\n3\n"
     )]
+    #[case(
+        r#"
+var a = "global";
+{
+  fun showA() {
+    print a;
+  }
+
+  showA();
+  var a = "block";
+  showA();
+}"#,
+        "global\nglobal\n"
+    )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());
