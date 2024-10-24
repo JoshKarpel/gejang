@@ -162,10 +162,16 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
         match stmt {
             Stmt::Block { stmts } => {
                 self.environments.borrow_mut().push();
+                let mut num_pops = 1;
                 for stmt in stmts {
+                    if matches!(stmt, Stmt::Var { .. }) {
+                        num_pops += 1;
+                    }
                     self.execute(stmt)?
                 }
-                self.environments.borrow_mut().pop();
+                for _ in 0..num_pops {
+                    self.environments.borrow_mut().pop();
+                }
             }
             Stmt::Expression { expr } => {
                 self.evaluate(expr)?;
@@ -196,6 +202,8 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     .map_err(|_| RuntimeError::PrintFailed)?;
             }
             Stmt::Var { name, initializer } => {
+                self.environments.borrow_mut().push();
+
                 let ival = if let Some(init) = initializer {
                     self.evaluate(init)?
                 } else {
