@@ -1,4 +1,9 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    io::{Read, Write},
+    rc::Rc,
+};
 
 use thiserror::Error;
 
@@ -31,12 +36,12 @@ impl<'s> ScopeStack<'s> {
     }
 }
 
-struct Resolver<'s, 'io, I, O, E> {
+struct Resolver<'s, 'io, I: Read, O: Write, E: Write> {
     interpreter: RefCell<Interpreter<'s, 'io, I, O, E>>,
     scopes: RefCell<ScopeStack<'s>>,
 }
 
-impl<'s, 'io, I, O, E> Resolver<'s, 'io, I, O, E> {
+impl<'s, 'io, I: Read, O: Write, E: Write> Resolver<'s, 'io, I, O, E> {
     fn resolve_statement(&self, stmt: &'s Stmt<'s>) -> ResolverResult {
         match stmt {
             Stmt::Block { stmts } => {
@@ -49,11 +54,43 @@ impl<'s, 'io, I, O, E> Resolver<'s, 'io, I, O, E> {
                 self.scopes.borrow_mut().pop();
             }
             Stmt::Break => {}
-            Stmt::Expression { .. } => {}
-            Stmt::Function { .. } => {}
-            Stmt::If { .. } => {}
-            Stmt::Print { .. } => {}
-            Stmt::Return { .. } => {}
+            Stmt::Expression { expr } => self.resolve_expression(expr)?,
+            Stmt::Function { name, params, body } => {
+                self.declare(name);
+                self.define(name);
+
+                self.scopes.borrow_mut().push();
+
+                for token in params {
+                    self.declare(token);
+                    self.define(token);
+                }
+
+                for s in body {
+                    self.resolve_statement(s)?
+                }
+
+                self.scopes.borrow_mut().pop();
+            }
+            Stmt::If {
+                condition,
+                then,
+                els,
+            } => {
+                self.resolve_expression(condition)?;
+                self.resolve_statement(then)?;
+                if let Some(e) = els {
+                    self.resolve_statement(e)?;
+                }
+            }
+            Stmt::Print { expr } => {
+                self.resolve_expression(expr)?;
+            }
+            Stmt::Return { value } => {
+                if let Some(v) = value {
+                    self.resolve_expression(v)?;
+                }
+            }
             Stmt::Var { name, initializer } => {
                 self.declare(name);
                 if let Some(i) = initializer {
@@ -61,7 +98,10 @@ impl<'s, 'io, I, O, E> Resolver<'s, 'io, I, O, E> {
                 }
                 self.define(name);
             }
-            Stmt::While { .. } => {}
+            Stmt::While { condition, body } => {
+                self.resolve_expression(condition)?;
+                self.resolve_statement(body)?;
+            }
         }
 
         Ok(())
@@ -69,20 +109,39 @@ impl<'s, 'io, I, O, E> Resolver<'s, 'io, I, O, E> {
 
     fn resolve_expression(&self, expr: &'s Expr<'s>) -> ResolverResult {
         match expr {
-            Expr::Assign { .. } => {}
-            Expr::Binary { .. } => {}
-            Expr::Call { .. } => {}
-            Expr::Unary { .. } => {}
-            Expr::Grouping { .. } => {}
+            Expr::Assign { name, value } => {
+                self.resolve_expression(value)?;
+                self.resolve_local(expr, name);
+            }
+            Expr::Binary { left, right, .. } => {
+                self.resolve_expression(left)?;
+                self.resolve_expression(right)?;
+            }
+            Expr::Call { callee, args } => {
+                self.resolve_expression(callee)?;
+
+                for a in args {
+                    self.resolve_expression(a)?;
+                }
+            }
+            Expr::Unary { right, .. } => {
+                self.resolve_expression(right)?;
+            }
+            Expr::Grouping { expr } => {
+                self.resolve_expression(expr)?;
+            }
             Expr::Literal { .. } => {}
-            Expr::Logical { .. } => {}
+            Expr::Logical { left, right, .. } => {
+                self.resolve_expression(left)?;
+                self.resolve_expression(right)?;
+            }
             Expr::Variable { name } => {
                 if let Some(false) = self
                     .scopes
                     .borrow()
                     .0
                     .last()
-                    .map(|s| s.borrow().get(name.lexeme))
+                    .map(|s| s.borrow().get(name.lexeme).cloned())
                     .flatten()
                 {
                     return Err(ResolutionError::Error {
