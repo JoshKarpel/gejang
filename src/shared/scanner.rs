@@ -104,6 +104,7 @@ impl Display for TokenType<'_> {
 
 impl Eq for TokenType<'_> {}
 
+// TODO this is only correct if the same token doesn't appear on the same line twice
 impl Hash for TokenType<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.to_string().hash(state);
