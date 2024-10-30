@@ -1,4 +1,9 @@
-use std::{fmt::Display, str::CharIndices};
+use std::{
+    borrow::Cow,
+    fmt::Display,
+    hash::{Hash, Hasher},
+    str::CharIndices,
+};
 
 use thiserror::Error;
 
@@ -52,48 +57,56 @@ impl Display for TokenType<'_> {
             f,
             "{}",
             match self {
-                TokenType::LeftParen => "(",
-                TokenType::RightParen => ")",
-                TokenType::LeftBrace => "{",
-                TokenType::RightBrace => "}",
-                TokenType::Comma => ",",
-                TokenType::Dot => ".",
-                TokenType::Minus => "-",
-                TokenType::Plus => "+",
-                TokenType::Semicolon => ";",
-                TokenType::Slash => "/",
-                TokenType::Star => "*",
-                TokenType::Bang => "!",
-                TokenType::BangEqual => "!=",
-                TokenType::Equal => "=",
-                TokenType::EqualEqual => "==",
-                TokenType::Greater => ">",
-                TokenType::GreaterEqual => ">=",
-                TokenType::Less => "<",
-                TokenType::LessEqual => "<=",
-                TokenType::Identifier(_) => "an identifier",
-                TokenType::String(_) => "a string",
-                TokenType::Number(_) => "a number",
-                TokenType::And => "and",
-                TokenType::Break => "break",
-                TokenType::Class => "class",
-                TokenType::Else => "else",
-                TokenType::False => "false",
-                TokenType::For => "for",
-                TokenType::Fun => "fun",
-                TokenType::If => "if",
-                TokenType::Nil => "nil",
-                TokenType::Or => "or",
-                TokenType::Print => "print",
-                TokenType::Return => "return",
-                TokenType::Super => "super",
-                TokenType::This => "this",
-                TokenType::True => "true",
-                TokenType::Var => "var",
-                TokenType::Comment(_) => "a comment",
-                TokenType::While => "while",
+                TokenType::LeftParen => Cow::from("("),
+                TokenType::RightParen => Cow::from(")"),
+                TokenType::LeftBrace => Cow::from("{"),
+                TokenType::RightBrace => Cow::from("}"),
+                TokenType::Comma => Cow::from("),"),
+                TokenType::Dot => Cow::from("."),
+                TokenType::Minus => Cow::from("-"),
+                TokenType::Plus => Cow::from("+"),
+                TokenType::Semicolon => Cow::from(";"),
+                TokenType::Slash => Cow::from("/"),
+                TokenType::Star => Cow::from("*"),
+                TokenType::Bang => Cow::from("!"),
+                TokenType::BangEqual => Cow::from("!="),
+                TokenType::Equal => Cow::from("="),
+                TokenType::EqualEqual => Cow::from("=="),
+                TokenType::Greater => Cow::from(">"),
+                TokenType::GreaterEqual => Cow::from(">="),
+                TokenType::Less => Cow::from("<"),
+                TokenType::LessEqual => Cow::from("<="),
+                TokenType::Identifier(id) => Cow::from(format!("identifier({id})")),
+                TokenType::String(s) => Cow::from(format!("string({s})")),
+                TokenType::Number(n) => Cow::from(format!("number({n})")),
+                TokenType::And => Cow::from("and"),
+                TokenType::Break => Cow::from("break"),
+                TokenType::Class => Cow::from("class"),
+                TokenType::Else => Cow::from("else"),
+                TokenType::False => Cow::from("false"),
+                TokenType::For => Cow::from("for"),
+                TokenType::Fun => Cow::from("fun"),
+                TokenType::If => Cow::from("if"),
+                TokenType::Nil => Cow::from("nil"),
+                TokenType::Or => Cow::from("or"),
+                TokenType::Print => Cow::from("print"),
+                TokenType::Return => Cow::from("return"),
+                TokenType::Super => Cow::from("super"),
+                TokenType::This => Cow::from("this"),
+                TokenType::True => Cow::from("true"),
+                TokenType::Var => Cow::from("var"),
+                TokenType::Comment(_) => Cow::from("a comment"),
+                TokenType::While => Cow::from("while"),
             }
         )
+    }
+}
+
+impl Eq for TokenType<'_> {}
+
+impl Hash for TokenType<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_string().hash(state);
     }
 }
 
@@ -140,7 +153,7 @@ impl TokenType<'_> {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Debug)]
 pub struct Token<'s> {
     pub typ: TokenType<'s>,
     pub lexeme: &'s str,

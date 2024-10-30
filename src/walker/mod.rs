@@ -16,7 +16,7 @@ use thiserror::Error;
 
 use crate::{
     shared::{scanner, streams::Streams},
-    walker::interpreter::Interpreter,
+    walker::{interpreter::Interpreter, resolver::resolve},
 };
 
 pub fn exec(source: &str) -> Result<()> {
@@ -58,6 +58,8 @@ pub enum InterpreterError {
     Scanner,
     #[error("Parser error")]
     Parser,
+    #[error("Resolver error")]
+    Resolver,
     #[error("Evaluation error")]
     Evaluation,
     #[error("Internal error")]
@@ -89,7 +91,9 @@ fn interpret<I: Read, O: Write, E: Write>(
         return Err(InterpreterError::Parser);
     }
 
-    let interpreter = Interpreter::new(streams);
+    let locals = resolve(&statements).map_err(|_| InterpreterError::Resolver)?;
+
+    let interpreter = Interpreter::new(streams, locals);
 
     interpreter.interpret(&statements).map_err(|e| {
         if writeln!(streams.borrow_mut().error, "{}", e.to_string().red()).is_err() {
@@ -148,15 +152,15 @@ global b
 global c
 "
     )]
-    #[case(
-        r#"
-var a = 1;
-{
-  var a = a + 2;
-  print a;
-}"#,
-        "3\n"
-    )]
+    //     #[case(
+    //         r#"
+    // var a = 1;
+    // {
+    //   var a = a + 2;
+    //   print a;
+    // }"#,
+    //         "3\n"  // this is an error, can't read local variable in its own initializer
+    //     )]
     #[case("if (true) print 1;", "1\n")]
     #[case("if (false) print 1;", "")]
     #[case("if (true) print 1; else print 0;", "1\n")]

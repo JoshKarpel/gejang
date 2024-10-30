@@ -13,6 +13,7 @@ use crate::{
     shared::{scanner::TokenType, streams::Streams},
     walker::{
         ast::{Expr, Stmt},
+        resolver::Locals,
         values::Value,
     },
 };
@@ -125,14 +126,23 @@ impl<'s> EnvironmentStack<'s> {
             })
     }
 
-    fn get(&self, name: &Cow<'s, str>) -> EvaluationResult<'s> {
-        self.0
-            .iter()
-            .rev()
-            .find_map(|e| e.borrow().get(name))
-            .ok_or_else(|| RuntimeError::UndefinedVariable {
-                name: name.to_string(),
-            })
+    fn get(&self, name: &Cow<'s, str>, depth: Option<&usize>) -> EvaluationResult<'s> {
+        let v: Option<Value<'s>> = if let Some(&d) = depth {
+            self.0
+                .get(d + 1)
+                .expect("Environment lookup resolved to missing depth")
+                .borrow()
+                .get(name)
+        } else {
+            self.0
+                .first()
+                .expect("Environment stack was unexpectedly empty")
+                .borrow()
+                .get(name)
+        };
+        v.ok_or_else(|| RuntimeError::UndefinedVariable {
+            name: name.to_string(),
+        })
     }
 }
 
@@ -140,13 +150,15 @@ impl<'s> EnvironmentStack<'s> {
 pub struct Interpreter<'s, 'io, I: Read, O: Write, E: Write> {
     environments: RefCell<EnvironmentStack<'s>>,
     streams: &'io RefCell<Streams<I, O, E>>,
+    locals: Locals<'s>,
 }
 
 impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
-    pub fn new(streams: &'io RefCell<Streams<I, O, E>>) -> Self {
+    pub fn new(streams: &'io RefCell<Streams<I, O, E>>, locals: Locals<'s>) -> Self {
         Self {
             environments: RefCell::new(EnvironmentStack::global()),
             streams,
+            locals,
         }
     }
 
@@ -296,7 +308,10 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     _ => unreachable!("Unexpected logical result/operator"),
                 };
             }
-            Expr::Variable { name } => self.environments.borrow().get(&Cow::from(name.lexeme))?,
+            Expr::Variable { name } => self
+                .environments
+                .borrow()
+                .get(&Cow::from(name.lexeme), self.locals.get(expr))?,
             Expr::Assign { name, value } => self
                 .environments
                 .borrow()

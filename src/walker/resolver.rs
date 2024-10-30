@@ -1,32 +1,25 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    io::{Read, Write},
-    rc::Rc,
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use thiserror::Error;
 
 use crate::{
     shared::scanner::Token,
-    walker::{
-        ast::{Expr, Stmt},
-        interpreter::Interpreter,
-    },
+    walker::ast::{Expr, Stmt},
 };
 
 #[derive(Error, Clone, Debug, PartialEq)]
-enum ResolutionError {
+pub enum ResolutionError {
     #[error("{msg}")]
     Error { msg: String },
 }
 
-type ResolverResult = Result<(), ResolutionError>;
+pub type ResolverResult = Result<(), ResolutionError>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct ScopeStack<'s>(Vec<Rc<RefCell<HashMap<&'s str, bool>>>>);
+pub type Locals<'s> = HashMap<&'s Expr<'s>, usize>;
 
-impl<'s> ScopeStack<'s> {
+impl ScopeStack<'_> {
     fn push(&mut self) {
         self.0.push(Rc::new(RefCell::new(HashMap::new())))
     }
@@ -35,13 +28,13 @@ impl<'s> ScopeStack<'s> {
         self.0.pop();
     }
 }
-
-struct Resolver<'s, 'io, I: Read, O: Write, E: Write> {
-    interpreter: RefCell<Interpreter<'s, 'io, I, O, E>>,
+#[derive(PartialEq, Debug, Default)]
+struct Resolver<'s> {
     scopes: RefCell<ScopeStack<'s>>,
+    locals: RefCell<Locals<'s>>,
 }
 
-impl<'s, 'io, I: Read, O: Write, E: Write> Resolver<'s, 'io, I, O, E> {
+impl<'s> Resolver<'s> {
     fn resolve_statement(&self, stmt: &'s Stmt<'s>) -> ResolverResult {
         match stmt {
             Stmt::Block { stmts } => {
@@ -141,8 +134,7 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Resolver<'s, 'io, I, O, E> {
                     .borrow()
                     .0
                     .last()
-                    .map(|s| s.borrow().get(name.lexeme).cloned())
-                    .flatten()
+                    .and_then(|s| s.borrow().get(name.lexeme).cloned())
                 {
                     return Err(ResolutionError::Error {
                         msg: "Cannot read local variable in its own initializer".to_string(),
@@ -173,16 +165,28 @@ impl<'s, 'io, I: Read, O: Write, E: Write> Resolver<'s, 'io, I, O, E> {
     }
 
     fn resolve_local(&self, expr: &'s Expr<'s>, name: &'s Token<'s>) {
-        let len = self.scopes.borrow().0.len();
         if let Some(depth) = self
             .scopes
             .borrow()
             .0
             .iter()
             .rposition(|s| s.borrow().contains_key(name.lexeme))
-            .map(|index| len - index)
         {
-            self.interpreter.borrow_mut().resolve(expr, depth)
+            self.locals.borrow_mut().insert(expr, depth);
         }
     }
+
+    fn locals(self) -> Locals<'s> {
+        self.locals.into_inner()
+    }
+}
+
+pub fn resolve<'s>(stmts: &'s [Stmt<'s>]) -> Result<Locals<'s>, ResolutionError> {
+    let resolver = Resolver::default();
+
+    for stmt in stmts {
+        resolver.resolve_statement(stmt)?;
+    }
+
+    Ok(resolver.locals())
 }

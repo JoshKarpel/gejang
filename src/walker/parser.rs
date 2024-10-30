@@ -651,7 +651,7 @@ mod tests {
     use crate::shared::scanner::scan;
 
     #[rstest]
-    #[case("1 + 2", Ok(Expr::Binary {
+    #[case("1 + 2", Ok(Expr::Binary{
         left: Box::new(Expr::Literal {
             value: &Token {
                 typ: TokenType::Number(1.0),
@@ -674,8 +674,8 @@ mod tests {
 
             },
         }),
-    }))]
-    #[case("(1 + 2)", Ok(Expr::Grouping {
+        }))]
+    #[case("(1 + 2)", Ok(Expr::Grouping{
         expr: Box::new(Expr::Binary {
             left: Box::new(Expr::Literal {
                 value: &Token {
@@ -697,8 +697,8 @@ mod tests {
                 },
             }),
         }),
-    }))]
-    #[case("clock()", Ok(Expr::Call {
+        }))]
+    #[case("clock()", Ok(Expr::Call{
         callee: Box::new(Expr::Variable {
             name: &Token {
                 typ: TokenType::Identifier("clock"),
@@ -707,8 +707,8 @@ mod tests {
             },
         }),
         args: vec![],
-    }))]
-    #[case("tsp2cup(15)", Ok(Expr::Call {
+        }))]
+    #[case("tsp2cup(15)", Ok(Expr::Call{
         callee: Box::new(Expr::Variable {
             name: &Token {
                 typ: TokenType::Identifier("tsp2cup"),
@@ -723,16 +723,16 @@ mod tests {
                 line: 0,
             }}
         ],
-    }))]
+        }))]
     #[case("(1 + 2", Err(ParserError::UnexpectedEndOfInput))]
-    #[case("(1 + 2 foo", Err(ParserError::UnexpectedToken {
+    #[case("(1 + 2 foo", Err(ParserError::UnexpectedToken{
         expected: TokenType::RightParen,
         token: &Token {
             typ: TokenType::Identifier("foo"),
             lexeme: "foo",
             line: 0,
         },
-    }))]
+        }))]
 
     fn test_parse(#[case] source: &str, #[case] expected: ParserExprResult) {
         let tokens: Vec<Token> = scan(source).try_collect().unwrap();
@@ -742,14 +742,14 @@ mod tests {
 
     #[rstest]
     #[case(ParserError::UnexpectedEndOfInput, "Unexpected end of input")]
-    #[case(ParserError::UnexpectedToken {
+    #[case(ParserError::UnexpectedToken{
         expected: TokenType::RightParen,
         token: &Token {
             typ: TokenType::Identifier("foo"),
             lexeme: "foo",
             line: 0,
         },
-    }, "Expected ) on line 0, but got an identifier")]
+        }, "Expected ) on line 0, but got identifier(foo)")]
     fn test_parse_error_display(#[case] err: ParserError, #[case] expected: &str) {
         assert_eq!(err.to_string(), expected);
     }
