@@ -8,7 +8,7 @@ type BoxedExpr<'s> = Box<Expr<'s>>;
 type BoxedStmt<'s> = Box<Stmt<'s>>;
 type RefToken<'s> = &'s Token<'s>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Expr<'s> {
     Assign {
         name: RefToken<'s>,
@@ -185,7 +185,7 @@ mod tests {
 
     #[rstest]
     #[case(
-        Expr::Binary {
+        Expr::Binary{
             left: Box::new(Expr::Literal {
                 value: &Token {
                     typ: TokenType::Number(1.0),
@@ -207,11 +207,11 @@ mod tests {
 
                 },
             }),
-        },
+            },
         "(+ 1 2)",
     )]
     #[case(
-        Expr::Binary {
+        Expr::Binary{
             left: Box::new(Expr::Unary {
                 op: &Token {
                     typ: TokenType::Minus,
@@ -244,7 +244,7 @@ mod tests {
                     },
                 }),
             }),
-        },
+            },
         "(* (- 1) (grouping 2))",
     )]
     fn test_printer(#[case] input: Expr, #[case] expected: &str) {
