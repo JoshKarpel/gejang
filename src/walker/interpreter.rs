@@ -112,18 +112,26 @@ impl<'s> EnvironmentStack<'s> {
             .define(name, value);
     }
 
-    fn assign(&self, name: &Cow<'s, str>, value: Value<'s>) -> EvaluationResult<'s> {
-        self.0
-            .iter()
-            .rev()
-            .find(|e| e.borrow().get(name).is_some())
-            .map(|e| {
-                e.borrow_mut().define(name.clone(), value.clone());
-                value
-            })
-            .ok_or_else(|| RuntimeError::UndefinedVariable {
-                name: name.to_string(),
-            })
+    fn assign(
+        &self,
+        name: &Cow<'s, str>,
+        value: Value<'s>,
+        depth: Option<&usize>,
+    ) -> EvaluationResult<'s> {
+        if let Some(&d) = depth {
+            self.0
+                .get(d + 1)
+                .expect("Environment lookup resolved to missing depth")
+                .borrow_mut()
+                .define(name.clone(), value.clone())
+        } else {
+            self.0
+                .first()
+                .expect("Environment stack was unexpectedly empty")
+                .borrow_mut()
+                .define(name.clone(), value.clone())
+        }
+        Ok(value)
     }
 
     fn get(&self, name: &Cow<'s, str>, depth: Option<&usize>) -> EvaluationResult<'s> {
@@ -312,10 +320,11 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 .environments
                 .borrow()
                 .get(&Cow::from(name.lexeme), self.locals.get(expr))?,
-            Expr::Assign { name, value } => self
-                .environments
-                .borrow()
-                .assign(&Cow::from(name.lexeme), self.evaluate(value)?)?,
+            Expr::Assign { name, value } => self.environments.borrow().assign(
+                &Cow::from(name.lexeme),
+                self.evaluate(value)?,
+                self.locals.get(expr),
+            )?,
             Expr::Call { callee, args } => {
                 let c = self.evaluate(callee)?;
 
