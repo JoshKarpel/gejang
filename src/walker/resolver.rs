@@ -19,6 +19,11 @@ pub type ResolverResult = Result<(), ResolutionError>;
 pub struct ScopeStack<'s>(Vec<Rc<RefCell<HashMap<&'s str, bool>>>>);
 pub type Locals<'s> = HashMap<&'s Expr<'s>, usize>;
 
+#[derive(Debug, PartialEq)]
+enum FunctionType {
+    Function,
+}
+
 impl ScopeStack<'_> {
     fn push(&mut self) {
         self.0.push(Rc::new(RefCell::new(HashMap::new())))
@@ -32,6 +37,7 @@ impl ScopeStack<'_> {
 struct Resolver<'s> {
     scopes: RefCell<ScopeStack<'s>>,
     locals: RefCell<Locals<'s>>,
+    current_function_type: RefCell<Option<FunctionType>>,
 }
 
 impl<'s> Resolver<'s> {
@@ -49,6 +55,10 @@ impl<'s> Resolver<'s> {
             Stmt::Break => {}
             Stmt::Expression { expr } => self.resolve_expression(expr)?,
             Stmt::Function { name, params, body } => {
+                let enclosing_function_type = self
+                    .current_function_type
+                    .replace(Some(FunctionType::Function));
+
                 self.declare(name)?;
                 self.define(name);
 
@@ -64,6 +74,8 @@ impl<'s> Resolver<'s> {
                 }
 
                 self.scopes.borrow_mut().pop();
+
+                self.current_function_type.replace(enclosing_function_type);
             }
             Stmt::If {
                 condition,
@@ -80,6 +92,12 @@ impl<'s> Resolver<'s> {
                 self.resolve_expression(expr)?;
             }
             Stmt::Return { value } => {
+                if self.current_function_type.borrow().is_none() {
+                    return Err(ResolutionError::Error {
+                        msg: "Cannot return from global scope".into(),
+                    });
+                }
+
                 if let Some(v) = value {
                     self.resolve_expression(v)?;
                 }
