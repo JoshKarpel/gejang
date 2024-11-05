@@ -91,7 +91,12 @@ fn interpret<I: Read, O: Write, E: Write>(
         return Err(InterpreterError::Parser);
     }
 
-    let locals = resolve(&statements).map_err(|_| InterpreterError::Resolver)?;
+    let locals = resolve(&statements)
+        .inspect_err(|e| {
+            writeln!(streams.borrow_mut().error, "{}", e.to_string().red())
+                .expect("Failed to write error");
+        })
+        .map_err(|_| InterpreterError::Resolver)?;
 
     let interpreter = Interpreter::new(streams, locals);
 

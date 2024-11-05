@@ -49,13 +49,13 @@ impl<'s> Resolver<'s> {
             Stmt::Break => {}
             Stmt::Expression { expr } => self.resolve_expression(expr)?,
             Stmt::Function { name, params, body } => {
-                self.declare(name);
+                self.declare(name)?;
                 self.define(name);
 
                 self.scopes.borrow_mut().push();
 
                 for token in params {
-                    self.declare(token);
+                    self.declare(token)?;
                     self.define(token);
                 }
 
@@ -85,7 +85,7 @@ impl<'s> Resolver<'s> {
                 }
             }
             Stmt::Var { name, initializer } => {
-                self.declare(name);
+                self.declare(name)?;
                 if let Some(i) = initializer {
                     self.resolve_expression(i)?;
                 }
@@ -148,12 +148,23 @@ impl<'s> Resolver<'s> {
         Ok(())
     }
 
-    fn declare(&self, name: &'s Token<'s>) {
+    fn declare(&self, name: &'s Token<'s>) -> ResolverResult {
         self.scopes
             .borrow_mut()
             .0
             .last_mut()
-            .map(|s| s.borrow_mut().insert(name.lexeme, false));
+            .map(|s| {
+                let mut scope = s.borrow_mut();
+                if scope.contains_key(name.lexeme) {
+                    Err(ResolutionError::Error {
+                        msg: format!("Variable {} was already defined in this scope", name.lexeme),
+                    })
+                } else {
+                    scope.insert(name.lexeme, false);
+                    Ok(())
+                }
+            })
+            .unwrap_or(Ok(()))
     }
 
     fn define(&self, name: &'s Token<'s>) {
