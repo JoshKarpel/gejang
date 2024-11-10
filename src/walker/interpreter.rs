@@ -387,6 +387,12 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                         rv.map(|_| Value::Nil)
                     }
+                    class @ Value::Class { .. } => {
+                        Ok(Value::Instance {
+                            class: Box::new(class.clone()),
+                            attributes: Default::default(),
+                        }) // TODO clone makes classes immutable
+                    }
                     _ => Err(RuntimeError::NotCallable {
                         typ: c.as_ref().to_string(),
                     }),

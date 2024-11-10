@@ -34,7 +34,7 @@ pub enum Value<'s> {
         name: &'s str,
     },
     Instance {
-        class: &'s Value<'s>,
+        class: Box<Value<'s>>,
         attributes: HashMap<Cow<'s, str>, Value<'s>>,
     },
 }
