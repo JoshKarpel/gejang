@@ -18,6 +18,8 @@ pub enum ParserError<'s> {
     UnexpectedEndOfInput,
     #[error("Invalid assignment target")] // better debug info
     InvalidAssignmentTarget,
+    #[error("{msg}")]
+    Error { msg: String },
 }
 
 type ParserExprResult<'s> = Result<Expr<'s>, ParserError<'s>>;
@@ -594,35 +596,57 @@ where
     fn call(&mut self) -> ParserExprResult<'s> {
         let mut expr = self.primary()?;
 
-        while self
-            .tokens
-            .next_if(|t| matches!(t.typ, TokenType::LeftParen))
-            .is_some()
-        {
-            let mut args = vec![];
-
-            while self
+        loop {
+            if self
                 .tokens
-                .peek()
-                .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
+                .next_if(|t| matches!(t.typ, TokenType::LeftParen))
+                .is_some()
             {
-                args.push(self.expression()?);
-                if !self
+                let mut args = vec![];
+
+                while self
                     .tokens
                     .peek()
-                    .is_some_and(|t| matches!(t.typ, TokenType::Comma))
+                    .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
                 {
-                    break;
+                    args.push(self.expression()?);
+                    if !self
+                        .tokens
+                        .peek()
+                        .is_some_and(|t| matches!(t.typ, TokenType::Comma))
+                    {
+                        break;
+                    }
                 }
+
+                self.require_token(TokenType::RightParen)?;
+
+                expr = Expr::Call {
+                    callee: Box::new(expr),
+                    // paren,  // trouble with multiple mutable borrows here
+                    args,
+                };
+            } else if self
+                .tokens
+                .next_if(|t| matches!(t.typ, TokenType::Dot))
+                .is_some()
+            {
+                if let Some(name) = self
+                    .tokens
+                    .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+                {
+                    expr = Expr::Get {
+                        object: Box::new(expr),
+                        name,
+                    }
+                } else {
+                    return Err(ParserError::Error {
+                        msg: "Expected identifier after .".into(),
+                    });
+                }
+            } else {
+                break;
             }
-
-            self.require_token(TokenType::RightParen)?;
-
-            expr = Expr::Call {
-                callee: Box::new(expr),
-                // paren,  // trouble with multiple mutable borrows here
-                args,
-            };
         }
 
         Ok(expr)

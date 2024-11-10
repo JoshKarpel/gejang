@@ -165,6 +165,9 @@ impl<'s> Resolver<'s> {
 
                 self.resolve_local(expr, name);
             }
+            Expr::Get { object, .. } => {
+                self.resolve_expression(object)?;
+            }
         }
 
         Ok(())

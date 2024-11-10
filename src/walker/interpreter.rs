@@ -30,6 +30,8 @@ pub enum RuntimeError<'s> {
     NotCallable { typ: String },
     #[error("Wrong number of arguments: expected {arity}, got {got}")]
     WrongNumberOfArgs { arity: usize, got: usize },
+    #[error("Only instances have attributes")]
+    OnlyInstancesHaveAttributes,
     #[error("Returning {value}")]
     Return { value: Value<'s> },
     #[error("Breaking loop")]
@@ -390,7 +392,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     class @ Value::Class { .. } => {
                         Ok(Value::Instance {
                             class: Box::new(class.clone()),
-                            attributes: Default::default(),
+                            fields: Default::default(),
                         }) // TODO clone makes classes immutable
                     }
                     _ => Err(RuntimeError::NotCallable {
@@ -402,6 +404,20 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     Ok(v) => v,
                     Err(RuntimeError::Return { value }) => value,
                     err => return err,
+                }
+            }
+            Expr::Get { object, name } => {
+                let o = self.evaluate(object)?;
+                if let Value::Instance {
+                    fields: attributes, ..
+                } = o
+                {
+                    attributes
+                        .get(&Cow::from(name.lexeme))
+                        .cloned()
+                        .unwrap_or(Value::Nil) // TODO ugh
+                } else {
+                    return Err(RuntimeError::OnlyInstancesHaveAttributes);
                 }
             }
         })

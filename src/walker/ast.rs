@@ -24,6 +24,10 @@ pub enum Expr<'s> {
         // paren: RefToken<'s>,
         args: Vec<Expr<'s>>,
     },
+    Get {
+        object: BoxedExpr<'s>,
+        name: RefToken<'s>,
+    },
     Unary {
         op: RefToken<'s>,
         right: BoxedExpr<'s>,
@@ -66,6 +70,9 @@ impl Display for Expr<'_> {
                         callee,
                         args.iter().map(|a| a.to_string()).join(", ")
                     )
+                }
+                Expr::Get { object, name } => {
+                    format!("(get {} {})", object, name.lexeme)
                 }
                 Expr::Unary { op, right } => {
                     format!("({} {})", op.lexeme, right)
