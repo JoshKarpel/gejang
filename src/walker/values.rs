@@ -15,7 +15,6 @@ use crate::{
 pub enum Value<'s> {
     // Is it really worth bringing those strings all the way from the source to here?
     #[allow(dead_code)]
-    Object(HashMap<Cow<'s, str>, Value<'s>>),
     Number(f64),
     String(Cow<'s, str>),
     Boolean(bool),
@@ -33,6 +32,10 @@ pub enum Value<'s> {
     },
     Class {
         name: &'s str,
+    },
+    Instance {
+        class: &'s Value<'s>,
+        attributes: HashMap<Cow<'s, str>, Value<'s>>,
     },
 }
 
@@ -66,7 +69,6 @@ impl Display for Value<'_> {
             f,
             "{}",
             match self {
-                Value::Object(_) => "<object>".to_string(), // TODO: implement better object display
                 Value::Number(value) => value.to_string(),
                 Value::String(value) => value.to_string(),
                 Value::Boolean(value) => value.to_string(),
@@ -74,6 +76,7 @@ impl Display for Value<'_> {
                 Value::NativeFunction { name, arity, .. } => format!("<native fun {name}/{arity}>"),
                 Value::Function { name, params, .. } => format!("<fun {}/{}>", name, params.len()),
                 Value::Class { name, .. } => format!("<cls {}>", name),
+                Value::Instance { class, .. } => format!("<instance of {}>", class), // TODO: implement better object display
             }
         )
     }
