@@ -251,6 +251,19 @@ var a = "global";
 }"#,
         "global\nglobal\n"
     )]
+    #[case(
+        r#"
+class Foo {
+  method() {
+    print("hello");
+  }
+}
+
+foo = Foo();
+print(foo);
+"#,
+        "<instance of <cls Foo>>\n"
+    )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());
