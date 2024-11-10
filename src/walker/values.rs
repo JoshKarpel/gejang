@@ -31,6 +31,9 @@ pub enum Value<'s> {
         body: &'s Vec<Stmt<'s>>,
         closure: EnvironmentStack<'s>,
     },
+    Class {
+        name: &'s str,
+    },
 }
 
 impl<'s> From<&TokenType<'s>> for Value<'s> {
@@ -70,6 +73,7 @@ impl Display for Value<'_> {
                 Value::Nil => "nil".to_string(),
                 Value::NativeFunction { name, arity, .. } => format!("<native fun {name}/{arity}>"),
                 Value::Function { name, params, .. } => format!("<fun {}/{}>", name, params.len()),
+                Value::Class { name, .. } => format!("<cls {}>", name),
             }
         )
     }

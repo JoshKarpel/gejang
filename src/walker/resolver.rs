@@ -113,6 +113,10 @@ impl<'s> Resolver<'s> {
                 self.resolve_expression(condition)?;
                 self.resolve_statement(body)?;
             }
+            Stmt::Class { name, .. } => {
+                self.declare(name)?;
+                self.define(name);
+            }
         }
 
         Ok(())

@@ -89,6 +89,10 @@ pub enum Stmt<'s> {
         stmts: Vec<Stmt<'s>>,
     },
     Break,
+    Class {
+        name: RefToken<'s>,
+        methods: Vec<Stmt<'s>>,
+    },
     Expression {
         expr: BoxedExpr<'s>,
     },
@@ -136,6 +140,23 @@ impl Display for Stmt<'_> {
                         name.lexeme,
                         params.iter().map(|p| p.lexeme).join(" "),
                         body.iter().map(|s| s.to_string()).join(" ")
+                    )
+                }
+                Stmt::Class { name, methods } => {
+                    format!(
+                        "(class {} {})",
+                        name.lexeme,
+                        methods
+                            .iter()
+                            .map(|m| format!(
+                                "({})",
+                                if let Stmt::Function { name, .. } = m {
+                                    name.lexeme
+                                } else {
+                                    ""
+                                }
+                            ))
+                            .join(" "),
                     )
                 }
                 Stmt::If {

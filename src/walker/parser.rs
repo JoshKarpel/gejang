@@ -171,6 +171,7 @@ where
                     | TokenType::Fun
                     | TokenType::Return
                     | TokenType::Break
+                    | TokenType::Class
             )
         }) {
             match token.typ {
@@ -185,6 +186,7 @@ where
                     self.require_token(TokenType::Semicolon)?;
                     Ok(Stmt::Break)
                 }
+                TokenType::Class => self.class_declaration(),
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {
@@ -387,6 +389,39 @@ where
         self.require_token(TokenType::Semicolon)?;
 
         Ok(Stmt::Return { value })
+    }
+
+    fn class_declaration(&mut self) -> ParserStmtResult<'s> {
+        if let Some(name) = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+        {
+            self.require_token(TokenType::LeftBrace)?;
+
+            let mut methods = Vec::new();
+
+            while self
+                .tokens
+                .peek()
+                .is_some_and(|t| !matches!(t.typ, TokenType::RightBrace))
+            {
+                methods.push(self.function()?)
+            }
+
+            self.require_token(TokenType::RightBrace)?;
+
+            Ok(Stmt::Class { name, methods })
+        } else {
+            Err(self
+                .tokens
+                .peek()
+                .map_or(ParserError::UnexpectedEndOfInput, |token| {
+                    ParserError::UnexpectedToken {
+                        expected: TokenType::Identifier(""),
+                        token,
+                    }
+                }))
+        }
     }
 
     fn expression_statement(&mut self) -> ParserStmtResult<'s> {

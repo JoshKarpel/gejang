@@ -199,6 +199,15 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     closure: self.environments.borrow().clone(),
                 },
             ),
+            Stmt::Class { name, .. } => {
+                self.environments
+                    .borrow()
+                    .define(Cow::from(name.lexeme), Value::Nil);
+                let cls = Value::Class { name: name.lexeme };
+                self.environments
+                    .borrow()
+                    .define(Cow::from(name.lexeme), cls);
+            }
             Stmt::If {
                 condition,
                 then,
