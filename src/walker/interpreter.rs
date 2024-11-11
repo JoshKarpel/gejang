@@ -17,6 +17,7 @@ use crate::{
         values::Value,
     },
 };
+pub type LoxPointer<'s> = Rc<RefCell<Value<'s>>>;
 
 #[derive(Error, Clone, Debug, PartialEq)]
 pub enum RuntimeError<'s> {
@@ -33,17 +34,17 @@ pub enum RuntimeError<'s> {
     #[error("Only instances have attributes")]
     OnlyInstancesHaveAttributes,
     #[error("Returning {value}")]
-    Return { value: Value<'s> },
+    Return { value: LoxPointer<'s> },
     #[error("Breaking loop")]
     Break,
 }
 
 pub type InterpretResult<'s> = Result<(), RuntimeError<'s>>;
-pub type EvaluationResult<'s> = Result<Value<'s>, RuntimeError<'s>>;
+pub type EvaluationResult<'s> = Result<LoxPointer<'s>, RuntimeError<'s>>;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct Environment<'s> {
-    values: HashMap<Cow<'s, str>, Value<'s>>,
+    values: HashMap<Cow<'s, str>, LoxPointer<'s>>,
 }
 
 impl<'s> Environment<'s> {
@@ -63,7 +64,8 @@ impl<'s> Environment<'s> {
                             .as_secs_f64(),
                     )
                 },
-            },
+            }
+            .into(),
         );
 
         e.define(
@@ -75,18 +77,19 @@ impl<'s> Environment<'s> {
                     [Value::Number(tsp)] => Value::Number(tsp / 48.0),
                     _ => unreachable!("Wrong number of arguments"),
                 },
-            },
+            }
+            .into(),
         );
 
         e
     }
 
-    fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
+    fn define(&mut self, name: Cow<'s, str>, value: LoxPointer<'s>) {
         self.values.insert(name, value);
     }
 
-    fn get(&self, name: &Cow<'s, str>) -> Option<Value<'s>> {
-        self.values.get(name).cloned() // TODO: clone means we can't mutate objects!
+    fn get(&self, name: &Cow<'s, str>) -> Option<&LoxPointer<'s>> {
+        self.values.get(name)
     }
 }
 
@@ -106,7 +109,7 @@ impl<'s> EnvironmentStack<'s> {
         self.0.pop();
     }
 
-    fn define(&self, name: Cow<'s, str>, value: Value<'s>) {
+    fn define(&self, name: Cow<'s, str>, value: LoxPointer<'s>) {
         self.0
             .last()
             .expect("Empty environment stack")
@@ -117,7 +120,7 @@ impl<'s> EnvironmentStack<'s> {
     fn assign(
         &self,
         name: &Cow<'s, str>,
-        value: Value<'s>,
+        value: LoxPointer<'s>,
         depth: Option<&usize>,
     ) -> EvaluationResult<'s> {
         if let Some(&d) = depth {
@@ -137,7 +140,7 @@ impl<'s> EnvironmentStack<'s> {
     }
 
     fn get(&self, name: &Cow<'s, str>, depth: Option<&usize>) -> EvaluationResult<'s> {
-        let v: Option<Value<'s>> = if let Some(&d) = depth {
+        let v: Option<&LoxPointer<'s>> = if let Some(&d) = depth {
             self.0
                 .get(d + 1)
                 .expect("Environment lookup resolved to missing depth")
@@ -150,7 +153,7 @@ impl<'s> EnvironmentStack<'s> {
                 .borrow()
                 .get(name)
         };
-        v.ok_or_else(|| RuntimeError::UndefinedVariable {
+        v.cloned().ok_or_else(|| RuntimeError::UndefinedVariable {
             name: name.to_string(),
         })
     }
@@ -199,23 +202,24 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     params: params.iter().map(|p| p.lexeme).collect(),
                     body,
                     closure: self.environments.borrow().clone(),
-                },
+                }
+                .into(),
             ),
             Stmt::Class { name, .. } => {
                 self.environments
                     .borrow()
-                    .define(Cow::from(name.lexeme), Value::Nil);
+                    .define(Cow::from(name.lexeme), Value::Nil.into());
                 let cls = Value::Class { name: name.lexeme };
                 self.environments
                     .borrow()
-                    .define(Cow::from(name.lexeme), cls);
+                    .define(Cow::from(name.lexeme), cls.into());
             }
             Stmt::If {
                 condition,
                 then,
                 els,
             } => {
-                if self.evaluate(condition)?.is_truthy() {
+                if self.evaluate(condition)?.borrow().is_truthy() {
                     self.execute(then)?
                 } else if let Some(e) = els {
                     self.execute(e)?;
@@ -230,13 +234,13 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let ival = if let Some(init) = initializer {
                     self.evaluate(init)?
                 } else {
-                    Value::Nil
+                    Value::Nil.into()
                 };
 
                 self.environments.borrow().define(name.lexeme.into(), ival);
             }
             Stmt::While { condition, body } => {
-                while self.evaluate(condition)?.is_truthy() {
+                while self.evaluate(condition)?.borrow().is_truthy() {
                     let r = self.execute(body);
                     if let Err(RuntimeError::Break) = r {
                         break;
@@ -249,7 +253,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let v = if let Some(e) = value {
                     self.evaluate(e)?
                 } else {
-                    Value::Nil
+                    Value::Nil.into()
                 };
 
                 return Err(RuntimeError::Return { value: v });
@@ -262,21 +266,21 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
     pub fn evaluate(&'s self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
-            Expr::Literal { value: token } => Value::from(&token.typ),
+            Expr::Literal { value: token } => Value::from(&token.typ).into(),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
                 let eval_right = self.evaluate(right)?;
 
                 match op.typ {
                     TokenType::Minus => match eval_right {
-                        Value::Number(value) => Value::Number(-value),
+                        Value::Number(value) => Value::Number(-value).into(),
                         _ => {
                             return Err(RuntimeError::Unimplemented {
                                 msg: "Cannot negate non-number".into(),
                             })
                         }
                     },
-                    TokenType::Bang => Value::Boolean(!eval_right.is_truthy()),
+                    TokenType::Bang => Value::Boolean(!eval_right.borrow().is_truthy()).into(),
                     _ => unreachable!("Unary operator not implemented: {:?}", op),
                 }
             }
@@ -285,25 +289,35 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let eval_right = self.evaluate(right)?;
 
                 match (eval_left, op.typ, eval_right) {
-                    (Value::Number(l), TokenType::Plus, Value::Number(r)) => Value::Number(l + r),
-                    (Value::Number(l), TokenType::Minus, Value::Number(r)) => Value::Number(l - r),
-                    (Value::Number(l), TokenType::Star, Value::Number(r)) => Value::Number(l * r),
-                    (Value::Number(l), TokenType::Slash, Value::Number(r)) => Value::Number(l / r),
+                    (Value::Number(l), TokenType::Plus, Value::Number(r)) => {
+                        Value::Number(l + r).into()
+                    }
+                    (Value::Number(l), TokenType::Minus, Value::Number(r)) => {
+                        Value::Number(l - r).into()
+                    }
+                    (Value::Number(l), TokenType::Star, Value::Number(r)) => {
+                        Value::Number(l * r).into()
+                    }
+                    (Value::Number(l), TokenType::Slash, Value::Number(r)) => {
+                        Value::Number(l / r).into()
+                    }
                     (Value::Number(l), TokenType::Greater, Value::Number(r)) => {
-                        Value::Boolean(l > r)
+                        Value::Boolean(l > r).into()
                     }
                     (Value::Number(l), TokenType::GreaterEqual, Value::Number(r)) => {
-                        Value::Boolean(l >= r)
+                        Value::Boolean(l >= r).into()
                     }
-                    (Value::Number(l), TokenType::Less, Value::Number(r)) => Value::Boolean(l < r),
+                    (Value::Number(l), TokenType::Less, Value::Number(r)) => {
+                        Value::Boolean(l < r).into()
+                    }
                     (Value::Number(l), TokenType::LessEqual, Value::Number(r)) => {
-                        Value::Boolean(l <= r)
+                        Value::Boolean(l <= r).into()
                     }
                     (Value::String(ref l), TokenType::Plus, Value::String(ref r)) => {
-                        Value::String(Cow::from(format!("{l}{r}")))
+                        Value::String(Cow::from(format!("{l}{r}"))).into()
                     }
-                    (l, TokenType::EqualEqual, r) => Value::Boolean(l == r),
-                    (l, TokenType::BangEqual, r) => Value::Boolean(l != r),
+                    (l, TokenType::EqualEqual, r) => Value::Boolean(l == r).into(),
+                    (l, TokenType::BangEqual, r) => Value::Boolean(l != r).into(),
                     // TODO: more specific errors!
                     (l, o, r) => {
                         return Err(RuntimeError::Unimplemented {
@@ -319,7 +333,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             Expr::Logical { left, op, right } => {
                 let l = self.evaluate(left)?;
 
-                return match (l.is_truthy(), op.typ) {
+                return match (l.borrow().is_truthy(), op.typ) {
                     (true, TokenType::Or) => Ok(l),
                     (false, TokenType::Or) => self.evaluate(right),
                     (true, TokenType::And) => self.evaluate(right),
@@ -336,6 +350,21 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 self.evaluate(value)?,
                 self.locals.get(expr),
             )?,
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => {
+                let o = self.evaluate(object)?;
+
+                if let Value::Instance { mut fields, .. } = o {
+                    let v = self.evaluate(value)?;
+                    fields.insert(Cow::from(name.lexeme), v.into());
+                    v.clone()
+                } else {
+                    return Err(RuntimeError::OnlyInstancesHaveAttributes);
+                }
+            }
             Expr::Call { callee, args } => {
                 let c = self.evaluate(callee)?;
 

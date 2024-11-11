@@ -43,6 +43,11 @@ pub enum Expr<'s> {
         op: RefToken<'s>,
         right: BoxedExpr<'s>,
     },
+    Set {
+        object: BoxedExpr<'s>,
+        name: RefToken<'s>,
+        value: BoxedExpr<'s>,
+    },
     Variable {
         name: RefToken<'s>,
     },
@@ -85,6 +90,13 @@ impl Display for Expr<'_> {
                     format!("({} {} {}", op.lexeme, left, right)
                 }
                 Expr::Variable { name } => name.lexeme.into(),
+                Expr::Set {
+                    object,
+                    name,
+                    value,
+                } => {
+                    format!("(set {} {} {})", object, name.lexeme, value)
+                }
             }
         )
     }

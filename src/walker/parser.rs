@@ -463,6 +463,12 @@ where
 
             if let Expr::Variable { name } = expr {
                 Ok(Expr::Assign { name, value })
+            } else if let Expr::Get { object, name } = expr {
+                Ok(Expr::Set {
+                    object,
+                    name,
+                    value,
+                })
             } else {
                 Err(ParserError::InvalidAssignmentTarget)
             }
