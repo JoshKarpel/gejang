@@ -217,11 +217,33 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 }
                 .into(),
             ),
-            Stmt::Class { name, .. } => {
+            Stmt::Class { name, methods } => {
                 self.environments
                     .borrow()
                     .define(Cow::from(name.lexeme), Value::Nil.into());
-                let cls = Value::Class { name: name.lexeme };
+                let methods = methods
+                    .iter()
+                    .map(|m| {
+                        if let Stmt::Function { name, params, body } = m {
+                            (
+                                Cow::from(name.lexeme),
+                                Value::Function {
+                                    name: name.lexeme,
+                                    params: params.iter().map(|p| p.lexeme).collect(),
+                                    body,
+                                    closure: self.environments.borrow().clone(),
+                                }
+                                .into(),
+                            )
+                        } else {
+                            unreachable!("Class method not a function")
+                        }
+                    })
+                    .collect();
+                let cls = Value::Class {
+                    name: name.lexeme,
+                    methods,
+                };
                 self.environments
                     .borrow()
                     .define(Cow::from(name.lexeme), cls.into());
@@ -439,11 +461,13 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                         rv.map(|_| Value::Nil.into())
                     }
-                    class @ Value::Class { .. } => Ok(Value::Instance {
-                        class: Box::new(class.clone().into()), // TODO: this seems wrong, should be able to use original Rc
-                        fields: Default::default(),
+                    ref class @ Value::Class { ref methods, .. } => {
+                        Ok(Value::Instance {
+                            class: Box::new(class.clone().into()), // TODO: this seems wrong, should be able to use original Rc
+                            fields: methods.clone(),
+                        }
+                        .into())
                     }
-                    .into()),
                     _ => Err(RuntimeError::NotCallable {
                         typ: c.borrow().to_string(),
                     }),

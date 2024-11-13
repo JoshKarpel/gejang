@@ -263,9 +263,10 @@ foo = Foo();
 print(foo);
 
 foo.field = "goodbye";
+foo.method();
 print(foo.field);
 "#,
-        "<instance of <cls Foo>>\ngoodbye\n"
+        "<instance of <cls Foo>>\nhello\ngoodbye\n"
     )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);

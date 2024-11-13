@@ -22,6 +22,7 @@ pub type Locals<'s> = HashMap<&'s Expr<'s>, usize>;
 #[derive(Debug, PartialEq)]
 enum FunctionType {
     Function,
+    Method,
 }
 
 impl ScopeStack<'_> {
@@ -113,9 +114,19 @@ impl<'s> Resolver<'s> {
                 self.resolve_expression(condition)?;
                 self.resolve_statement(body)?;
             }
-            Stmt::Class { name, .. } => {
+            Stmt::Class { name, methods } => {
                 self.declare(name)?;
                 self.define(name);
+
+                for method in methods {
+                    let enclosing_function_type = self
+                        .current_function_type
+                        .replace(Some(FunctionType::Method));
+
+                    self.resolve_statement(method)?;
+
+                    self.current_function_type.replace(enclosing_function_type);
+                }
             }
         }
 

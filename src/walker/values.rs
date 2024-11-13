@@ -35,6 +35,7 @@ pub enum Value<'s> {
     },
     Class {
         name: &'s str,
+        methods: HashMap<Cow<'s, str>, LoxPointer<'s>>,
     },
     Instance {
         class: Box<LoxPointer<'s>>,
