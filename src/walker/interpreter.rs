@@ -487,13 +487,13 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                                 let old_env = self.environments.replace(closure.clone());
 
-                                self.environments.borrow_mut().push();
+                                self.environments.borrow_mut().push(); // this is the "class" environment that holds `this`
 
                                 self.environments
                                     .borrow()
                                     .define(Cow::from("this"), instance.clone());
 
-                                self.environments.borrow_mut().push();
+                                self.environments.borrow_mut().push(); // this is the environment for the function call
 
                                 a.iter().zip(params.iter()).for_each(|(arg, &param)| {
                                     self.environments
