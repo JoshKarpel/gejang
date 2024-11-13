@@ -684,6 +684,7 @@ where
                         expr: Box::new(expr),
                     }
                 }
+                TokenType::This => Expr::This { keyword: token },
                 TokenType::Identifier(_) => Expr::Variable { name: token },
                 _ => {
                     return Err(ParserError::UnexpectedToken {

@@ -268,6 +268,21 @@ print(foo.field);
 "#,
         "<instance of <cls Foo>>\nhello\ngoodbye\n"
     )]
+    #[case(
+        r#"
+class Cake {
+  taste() {
+    var adjective = "delicious";
+    print "The " + this.flavor + " cake is " + adjective + "!";
+  }
+}
+
+var cake = Cake();
+cake.flavor = "German chocolate";
+cake.taste();
+"#,
+        "The German chocolate cake is delicious!\n"
+    )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());

@@ -118,6 +118,14 @@ impl<'s> Resolver<'s> {
                 self.declare(name)?;
                 self.define(name);
 
+                self.scopes.borrow_mut().push();
+
+                self.scopes
+                    .borrow_mut()
+                    .0
+                    .last_mut()
+                    .map(|s| s.borrow_mut().insert("this", true));
+
                 for method in methods {
                     let enclosing_function_type = self
                         .current_function_type
@@ -127,6 +135,8 @@ impl<'s> Resolver<'s> {
 
                     self.current_function_type.replace(enclosing_function_type);
                 }
+
+                self.scopes.borrow_mut().pop();
             }
         }
 
@@ -182,6 +192,9 @@ impl<'s> Resolver<'s> {
             Expr::Set { object, value, .. } => {
                 self.resolve_expression(object)?;
                 self.resolve_expression(value)?;
+            }
+            Expr::This { keyword } => {
+                self.resolve_local(expr, keyword);
             }
         }
 

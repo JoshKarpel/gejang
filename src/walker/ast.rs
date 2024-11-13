@@ -48,6 +48,9 @@ pub enum Expr<'s> {
         name: RefToken<'s>,
         value: BoxedExpr<'s>,
     },
+    This {
+        keyword: RefToken<'s>,
+    },
     Variable {
         name: RefToken<'s>,
     },
@@ -96,6 +99,9 @@ impl Display for Expr<'_> {
                     value,
                 } => {
                     format!("(set {} {} {})", object, name.lexeme, value)
+                }
+                Expr::This { .. } => {
+                    "this".to_string()
                 }
             }
         )

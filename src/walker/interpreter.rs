@@ -494,8 +494,32 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 } else {
                     return Err(RuntimeError::OnlyInstancesHaveAttributes);
                 };
+                if let Value::Function {
+                    name,
+                    params,
+                    body,
+                    closure,
+                } = x.borrow().deref()
+                {
+                    let mut closure_with_this = closure.clone();
+                    closure_with_this.push();
+                    if let Some(e) = closure_with_this.0.last_mut() {
+                        e.borrow_mut().define(Cow::from("this"), o.clone());
+                    }
+                    return Ok(Value::Function {
+                        name,
+                        params: params.clone(),
+                        body,
+                        closure: closure_with_this,
+                    }
+                    .into());
+                }
                 x
             }
+            Expr::This { keyword } => self
+                .environments
+                .borrow()
+                .get(&Cow::from(keyword.lexeme), self.locals.get(expr))?,
         })
     }
 }
