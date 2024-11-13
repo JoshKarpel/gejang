@@ -139,7 +139,7 @@ impl<'s> EnvironmentStack<'s> {
         if let Some(&d) = depth {
             self.0
                 .get(d + 1)
-                .expect("Environment lookup resolved to missing depth")
+                .expect("Environment lookup resolved to missing depth during assignment")
                 .borrow_mut()
                 .define(name.clone(), value.clone())
         } else {
@@ -154,9 +154,10 @@ impl<'s> EnvironmentStack<'s> {
 
     fn get(&self, name: &Cow<'s, str>, depth: Option<&usize>) -> EvaluationResult<'s> {
         let v: Option<LoxPointer<'s>> = if let Some(&d) = depth {
+            println!("Looking up at depth {} on {}", d, name);
             self.0
                 .get(d + 1)
-                .expect("Environment lookup resolved to missing depth")
+                .expect("Environment lookup resolved to missing depth during lookup")
         } else {
             self.0
                 .first()
@@ -488,11 +489,11 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                                 self.environments.borrow_mut().push();
 
-                                let mut closure_with_this = closure.clone();
-                                closure_with_this.push();
-                                if let Some(e) = closure_with_this.0.last_mut() {
-                                    e.borrow_mut().define(Cow::from("this"), instance.clone());
-                                }
+                                self.environments
+                                    .borrow()
+                                    .define(Cow::from("this"), instance.clone());
+
+                                self.environments.borrow_mut().push();
 
                                 a.iter().zip(params.iter()).for_each(|(arg, &param)| {
                                     self.environments
@@ -502,6 +503,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                                 self.interpret(body)?;
 
+                                self.environments.borrow_mut().pop();
                                 self.environments.borrow_mut().pop();
 
                                 self.environments.replace(old_env);
