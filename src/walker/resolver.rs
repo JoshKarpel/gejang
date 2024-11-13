@@ -25,6 +25,11 @@ enum FunctionType {
     Method,
 }
 
+#[derive(Debug, PartialEq)]
+enum ClassType {
+    Class,
+}
+
 impl ScopeStack<'_> {
     fn push(&mut self) {
         self.0.push(Rc::new(RefCell::new(HashMap::new())))
@@ -39,6 +44,7 @@ struct Resolver<'s> {
     scopes: RefCell<ScopeStack<'s>>,
     locals: RefCell<Locals<'s>>,
     current_function_type: RefCell<Option<FunctionType>>,
+    current_class_type: RefCell<Option<ClassType>>,
 }
 
 impl<'s> Resolver<'s> {
@@ -115,6 +121,8 @@ impl<'s> Resolver<'s> {
                 self.resolve_statement(body)?;
             }
             Stmt::Class { name, methods } => {
+                let enclosing_class_type = self.current_class_type.replace(Some(ClassType::Class));
+
                 self.declare(name)?;
                 self.define(name);
 
@@ -137,6 +145,8 @@ impl<'s> Resolver<'s> {
                 }
 
                 self.scopes.borrow_mut().pop();
+
+                self.current_class_type.replace(enclosing_class_type);
             }
         }
 
@@ -194,6 +204,12 @@ impl<'s> Resolver<'s> {
                 self.resolve_expression(value)?;
             }
             Expr::This { keyword } => {
+                if self.current_class_type.borrow().is_none() {
+                    return Err(ResolutionError::Error {
+                        msg: "Cannot use 'this' outside a class".into(),
+                    });
+                }
+
                 self.resolve_local(expr, keyword);
             }
         }
