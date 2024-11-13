@@ -283,6 +283,18 @@ cake.taste();
 "#,
         "The German chocolate cake is delicious!\n"
     )]
+    #[case(
+        r#"
+class Foo {
+  init(foo) {
+    this.foo = foo;
+  }
+}
+
+print(Foo("bar").foo);
+"#,
+        "bar\n"
+    )]
     fn test_interpreter(#[case] source: &str, #[case] expected: &str) {
         println!("source:\n{}", source);
         let streams = RefCell::new(Streams::test());

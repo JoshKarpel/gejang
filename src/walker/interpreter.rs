@@ -462,11 +462,53 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                         rv.map(|_| Value::Nil.into())
                     }
                     ref class @ Value::Class { ref methods, .. } => {
-                        Ok(Value::Instance {
+                        let instance: LoxPointer = Value::Instance {
                             class: Box::new(class.clone().into()), // TODO: this seems wrong, should be able to use original Rc
                             fields: methods.clone(),
                         }
-                        .into())
+                        .into();
+
+                        if let Some(init) = methods.get("init") {
+                            if let Value::Function {
+                                name: _,
+                                params,
+                                body,
+                                closure,
+                            } = init.borrow().deref()
+                            {
+                                let num_params = params.len();
+                                if num_args != num_params {
+                                    return Err(RuntimeError::WrongNumberOfArgs {
+                                        arity: num_params,
+                                        got: num_args,
+                                    });
+                                };
+
+                                let old_env = self.environments.replace(closure.clone());
+
+                                self.environments.borrow_mut().push();
+
+                                let mut closure_with_this = closure.clone();
+                                closure_with_this.push();
+                                if let Some(e) = closure_with_this.0.last_mut() {
+                                    e.borrow_mut().define(Cow::from("this"), instance.clone());
+                                }
+
+                                a.iter().zip(params.iter()).for_each(|(arg, &param)| {
+                                    self.environments
+                                        .borrow()
+                                        .define(Cow::from(param), arg.clone()) // TODO another clone
+                                });
+
+                                self.interpret(body)?;
+
+                                self.environments.borrow_mut().pop();
+
+                                self.environments.replace(old_env);
+                            }
+                        }
+
+                        Ok(instance)
                     }
                     _ => Err(RuntimeError::NotCallable {
                         typ: c.borrow().to_string(),
