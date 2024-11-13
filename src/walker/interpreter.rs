@@ -3,6 +3,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     io::{Read, Write},
+    ops::{Deref, DerefMut},
     rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -17,7 +18,14 @@ use crate::{
         values::Value,
     },
 };
+
 pub type LoxPointer<'s> = Rc<RefCell<Value<'s>>>;
+
+impl<'s> From<Value<'s>> for LoxPointer<'s> {
+    fn from(value: Value<'s>) -> Self {
+        Rc::new(RefCell::new(value))
+    }
+}
 
 #[derive(Error, Clone, Debug, PartialEq)]
 pub enum RuntimeError<'s> {
@@ -33,7 +41,7 @@ pub enum RuntimeError<'s> {
     WrongNumberOfArgs { arity: usize, got: usize },
     #[error("Only instances have attributes")]
     OnlyInstancesHaveAttributes,
-    #[error("Returning {value}")]
+    #[error("Returning")]
     Return { value: LoxPointer<'s> },
     #[error("Breaking loop")]
     Break,
@@ -63,6 +71,7 @@ impl<'s> Environment<'s> {
                             .expect("Are you living in the past?")
                             .as_secs_f64(),
                     )
+                    .into()
                 },
             }
             .into(),
@@ -73,9 +82,13 @@ impl<'s> Environment<'s> {
             Value::NativeFunction {
                 name: "tsp2cup",
                 arity: 1,
-                f: |args| match args {
-                    [Value::Number(tsp)] => Value::Number(tsp / 48.0),
-                    _ => unreachable!("Wrong number of arguments"),
+                f: |args| {
+                    let tsp = match args.first().expect("Missing argument").borrow().deref() {
+                        Value::Number(v) => *v,
+                        _ => unreachable!(),
+                    };
+
+                    Value::Number(tsp / 48.0).into()
                 },
             }
             .into(),
@@ -140,20 +153,19 @@ impl<'s> EnvironmentStack<'s> {
     }
 
     fn get(&self, name: &Cow<'s, str>, depth: Option<&usize>) -> EvaluationResult<'s> {
-        let v: Option<&LoxPointer<'s>> = if let Some(&d) = depth {
+        let v: Option<LoxPointer<'s>> = if let Some(&d) = depth {
             self.0
                 .get(d + 1)
                 .expect("Environment lookup resolved to missing depth")
-                .borrow()
-                .get(name)
         } else {
             self.0
                 .first()
                 .expect("Environment stack was unexpectedly empty")
-                .borrow()
-                .get(name)
-        };
-        v.cloned().ok_or_else(|| RuntimeError::UndefinedVariable {
+        }
+        .borrow()
+        .get(name)
+        .cloned();
+        v.ok_or_else(|| RuntimeError::UndefinedVariable {
             name: name.to_string(),
         })
     }
@@ -169,7 +181,7 @@ pub struct Interpreter<'s, 'io, I: Read, O: Write, E: Write> {
 impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
     pub fn new(streams: &'io RefCell<Streams<I, O, E>>, locals: Locals<'s>) -> Self {
         Self {
-            environments: RefCell::new(EnvironmentStack::global()),
+            environments: EnvironmentStack::global().into(),
             streams,
             locals,
         }
@@ -227,7 +239,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             }
             Stmt::Print { expr } => {
                 let value = self.evaluate(expr)?;
-                writeln!(self.streams.borrow_mut().output, "{}", &value)
+                writeln!(self.streams.borrow_mut().output, "{}", &value.borrow())
                     .map_err(|_| RuntimeError::PrintFailed)?;
             }
             Stmt::Var { name, initializer } => {
@@ -272,7 +284,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let eval_right = self.evaluate(right)?;
 
                 match op.typ {
-                    TokenType::Minus => match eval_right {
+                    TokenType::Minus => match eval_right.borrow().deref() {
                         Value::Number(value) => Value::Number(-value).into(),
                         _ => {
                             return Err(RuntimeError::Unimplemented {
@@ -280,7 +292,9 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                             })
                         }
                     },
-                    TokenType::Bang => Value::Boolean(!eval_right.borrow().is_truthy()).into(),
+                    TokenType::Bang => {
+                        Value::Boolean(!eval_right.borrow().deref().is_truthy()).into()
+                    }
                     _ => unreachable!("Unary operator not implemented: {:?}", op),
                 }
             }
@@ -288,7 +302,11 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let eval_left = self.evaluate(left)?;
                 let eval_right = self.evaluate(right)?;
 
-                match (eval_left, op.typ, eval_right) {
+                let x = match (
+                    eval_left.borrow().deref(),
+                    op.typ,
+                    eval_right.borrow().deref(),
+                ) {
                     (Value::Number(l), TokenType::Plus, Value::Number(r)) => {
                         Value::Number(l + r).into()
                     }
@@ -328,12 +346,13 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                             ),
                         })
                     }
-                }
+                };
+                x
             }
             Expr::Logical { left, op, right } => {
                 let l = self.evaluate(left)?;
 
-                return match (l.borrow().is_truthy(), op.typ) {
+                return match (l.clone().borrow().is_truthy(), op.typ) {
                     (true, TokenType::Or) => Ok(l),
                     (false, TokenType::Or) => self.evaluate(right),
                     (true, TokenType::And) => self.evaluate(right),
@@ -357,13 +376,14 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             } => {
                 let o = self.evaluate(object)?;
 
-                if let Value::Instance { mut fields, .. } = o {
+                let x = if let Value::Instance { ref mut fields, .. } = o.borrow_mut().deref_mut() {
                     let v = self.evaluate(value)?;
-                    fields.insert(Cow::from(name.lexeme), v.into());
-                    v.clone()
+                    fields.insert(Cow::from(name.lexeme), v.clone());
+                    v
                 } else {
                     return Err(RuntimeError::OnlyInstancesHaveAttributes);
-                }
+                };
+                x
             }
             Expr::Call { callee, args } => {
                 let c = self.evaluate(callee)?;
@@ -371,11 +391,12 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let a = args
                     .iter()
                     .map(|arg| self.evaluate(arg))
-                    .collect::<Result<Vec<Value>, RuntimeError>>()?;
+                    .collect::<Result<Vec<LoxPointer>, RuntimeError>>()?;
 
                 let num_args = a.len();
 
-                let r = match c {
+                let r = match c.borrow().deref().clone() {
+                    // TODO: clone here is weird
                     Value::NativeFunction { name: _, f, arity } => {
                         if num_args != arity {
                             return Err(RuntimeError::WrongNumberOfArgs {
@@ -416,38 +437,40 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                         self.environments.replace(old_env);
 
-                        rv.map(|_| Value::Nil)
+                        rv.map(|_| Value::Nil.into())
                     }
-                    class @ Value::Class { .. } => {
-                        Ok(Value::Instance {
-                            class: Box::new(class.clone()),
-                            fields: Default::default(),
-                        }) // TODO clone makes classes immutable
+                    class @ Value::Class { .. } => Ok(Value::Instance {
+                        class: Box::new(class.clone().into()), // TODO: this seems wrong, should be able to use original Rc
+                        fields: Default::default(),
                     }
+                    .into()),
                     _ => Err(RuntimeError::NotCallable {
-                        typ: c.as_ref().to_string(),
+                        typ: c.borrow().to_string(),
                     }),
                 };
 
                 match r {
                     Ok(v) => v,
                     Err(RuntimeError::Return { value }) => value,
-                    err => return err,
+                    Err(e) => return Err(e),
                 }
             }
             Expr::Get { object, name } => {
                 let o = self.evaluate(object)?;
-                if let Value::Instance {
+                let x = if let Value::Instance {
                     fields: attributes, ..
-                } = o
+                } = o.borrow().deref()
                 {
                     attributes
                         .get(&Cow::from(name.lexeme))
                         .cloned()
-                        .unwrap_or(Value::Nil) // TODO ugh
+                        .ok_or_else(|| RuntimeError::UndefinedVariable {
+                            name: name.lexeme.to_string(),
+                        })?
                 } else {
                     return Err(RuntimeError::OnlyInstancesHaveAttributes);
-                }
+                };
+                x
             }
         })
     }

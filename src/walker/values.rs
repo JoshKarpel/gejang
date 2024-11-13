@@ -8,7 +8,10 @@ use strum_macros::{AsRefStr, IntoStaticStr};
 
 use crate::{
     shared::scanner::TokenType,
-    walker::{ast::Stmt, interpreter::EnvironmentStack},
+    walker::{
+        ast::Stmt,
+        interpreter::{EnvironmentStack, LoxPointer},
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, AsRefStr, IntoStaticStr)]
@@ -22,7 +25,7 @@ pub enum Value<'s> {
     NativeFunction {
         name: &'static str,
         arity: usize,
-        f: fn(&[Value<'s>]) -> Value<'s>,
+        f: fn(&[LoxPointer<'s>]) -> LoxPointer<'s>,
     },
     Function {
         name: &'s str,
@@ -34,8 +37,8 @@ pub enum Value<'s> {
         name: &'s str,
     },
     Instance {
-        class: Box<Value<'s>>,
-        fields: HashMap<Cow<'s, str>, Value<'s>>,
+        class: Box<LoxPointer<'s>>,
+        fields: HashMap<Cow<'s, str>, LoxPointer<'s>>,
     },
 }
 
@@ -76,7 +79,7 @@ impl Display for Value<'_> {
                 Value::NativeFunction { name, arity, .. } => format!("<native fun {name}/{arity}>"),
                 Value::Function { name, params, .. } => format!("<fun {}/{}>", name, params.len()),
                 Value::Class { name, .. } => format!("<cls {}>", name),
-                Value::Instance { class, .. } => format!("<instance of {}>", class), // TODO: implement better object display
+                Value::Instance { class, .. } => format!("<instance of {}>", class.borrow()), // TODO: implement better object display
             }
         )
     }
