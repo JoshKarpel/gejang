@@ -3,6 +3,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     io::{Read, Write},
+    ops::{Deref, DerefMut},
     rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -18,6 +19,14 @@ use crate::{
     },
 };
 
+pub type LoxPointer<'s> = Rc<RefCell<Value<'s>>>;
+
+impl<'s> From<Value<'s>> for LoxPointer<'s> {
+    fn from(value: Value<'s>) -> Self {
+        Rc::new(RefCell::new(value))
+    }
+}
+
 #[derive(Error, Clone, Debug, PartialEq)]
 pub enum RuntimeError<'s> {
     #[error("{msg}")]
@@ -30,18 +39,20 @@ pub enum RuntimeError<'s> {
     NotCallable { typ: String },
     #[error("Wrong number of arguments: expected {arity}, got {got}")]
     WrongNumberOfArgs { arity: usize, got: usize },
-    #[error("Returning {value}")]
-    Return { value: Value<'s> },
+    #[error("Only instances have attributes")]
+    OnlyInstancesHaveAttributes,
+    #[error("Returning")]
+    Return { value: LoxPointer<'s> },
     #[error("Breaking loop")]
     Break,
 }
 
 pub type InterpretResult<'s> = Result<(), RuntimeError<'s>>;
-pub type EvaluationResult<'s> = Result<Value<'s>, RuntimeError<'s>>;
+pub type EvaluationResult<'s> = Result<LoxPointer<'s>, RuntimeError<'s>>;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct Environment<'s> {
-    values: HashMap<Cow<'s, str>, Value<'s>>,
+    values: HashMap<Cow<'s, str>, LoxPointer<'s>>,
 }
 
 impl<'s> Environment<'s> {
@@ -60,8 +71,10 @@ impl<'s> Environment<'s> {
                             .expect("Are you living in the past?")
                             .as_secs_f64(),
                     )
+                    .into()
                 },
-            },
+            }
+            .into(),
         );
 
         e.define(
@@ -69,22 +82,27 @@ impl<'s> Environment<'s> {
             Value::NativeFunction {
                 name: "tsp2cup",
                 arity: 1,
-                f: |args| match args {
-                    [Value::Number(tsp)] => Value::Number(tsp / 48.0),
-                    _ => unreachable!("Wrong number of arguments"),
+                f: |args| {
+                    let tsp = match args.first().expect("Missing argument").borrow().deref() {
+                        Value::Number(v) => *v,
+                        _ => unreachable!(),
+                    };
+
+                    Value::Number(tsp / 48.0).into()
                 },
-            },
+            }
+            .into(),
         );
 
         e
     }
 
-    fn define(&mut self, name: Cow<'s, str>, value: Value<'s>) {
+    fn define(&mut self, name: Cow<'s, str>, value: LoxPointer<'s>) {
         self.values.insert(name, value);
     }
 
-    fn get(&self, name: &Cow<'s, str>) -> Option<Value<'s>> {
-        self.values.get(name).cloned() // TODO: clone means we can't mutate objects!
+    fn get(&self, name: &Cow<'s, str>) -> Option<&LoxPointer<'s>> {
+        self.values.get(name)
     }
 }
 
@@ -104,7 +122,7 @@ impl<'s> EnvironmentStack<'s> {
         self.0.pop();
     }
 
-    fn define(&self, name: Cow<'s, str>, value: Value<'s>) {
+    fn define(&self, name: Cow<'s, str>, value: LoxPointer<'s>) {
         self.0
             .last()
             .expect("Empty environment stack")
@@ -115,13 +133,13 @@ impl<'s> EnvironmentStack<'s> {
     fn assign(
         &self,
         name: &Cow<'s, str>,
-        value: Value<'s>,
+        value: LoxPointer<'s>,
         depth: Option<&usize>,
     ) -> EvaluationResult<'s> {
         if let Some(&d) = depth {
             self.0
                 .get(d + 1)
-                .expect("Environment lookup resolved to missing depth")
+                .expect("Environment lookup resolved to missing depth during assignment")
                 .borrow_mut()
                 .define(name.clone(), value.clone())
         } else {
@@ -135,19 +153,19 @@ impl<'s> EnvironmentStack<'s> {
     }
 
     fn get(&self, name: &Cow<'s, str>, depth: Option<&usize>) -> EvaluationResult<'s> {
-        let v: Option<Value<'s>> = if let Some(&d) = depth {
+        let v: Option<LoxPointer<'s>> = if let Some(&d) = depth {
+            println!("Looking up at depth {} on {}", d, name);
             self.0
                 .get(d + 1)
-                .expect("Environment lookup resolved to missing depth")
-                .borrow()
-                .get(name)
+                .expect("Environment lookup resolved to missing depth during lookup")
         } else {
             self.0
                 .first()
                 .expect("Environment stack was unexpectedly empty")
-                .borrow()
-                .get(name)
-        };
+        }
+        .borrow()
+        .get(name)
+        .cloned();
         v.ok_or_else(|| RuntimeError::UndefinedVariable {
             name: name.to_string(),
         })
@@ -164,7 +182,7 @@ pub struct Interpreter<'s, 'io, I: Read, O: Write, E: Write> {
 impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
     pub fn new(streams: &'io RefCell<Streams<I, O, E>>, locals: Locals<'s>) -> Self {
         Self {
-            environments: RefCell::new(EnvironmentStack::global()),
+            environments: EnvironmentStack::global().into(),
             streams,
             locals,
         }
@@ -197,14 +215,46 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                     params: params.iter().map(|p| p.lexeme).collect(),
                     body,
                     closure: self.environments.borrow().clone(),
-                },
+                }
+                .into(),
             ),
+            Stmt::Class { name, methods } => {
+                self.environments
+                    .borrow()
+                    .define(Cow::from(name.lexeme), Value::Nil.into());
+                let methods = methods
+                    .iter()
+                    .map(|m| {
+                        if let Stmt::Function { name, params, body } = m {
+                            (
+                                Cow::from(name.lexeme),
+                                Value::Function {
+                                    name: name.lexeme,
+                                    params: params.iter().map(|p| p.lexeme).collect(),
+                                    body,
+                                    closure: self.environments.borrow().clone(),
+                                }
+                                .into(),
+                            )
+                        } else {
+                            unreachable!("Class method not a function")
+                        }
+                    })
+                    .collect();
+                let cls = Value::Class {
+                    name: name.lexeme,
+                    methods,
+                };
+                self.environments
+                    .borrow()
+                    .define(Cow::from(name.lexeme), cls.into());
+            }
             Stmt::If {
                 condition,
                 then,
                 els,
             } => {
-                if self.evaluate(condition)?.is_truthy() {
+                if self.evaluate(condition)?.borrow().is_truthy() {
                     self.execute(then)?
                 } else if let Some(e) = els {
                     self.execute(e)?;
@@ -212,20 +262,20 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
             }
             Stmt::Print { expr } => {
                 let value = self.evaluate(expr)?;
-                writeln!(self.streams.borrow_mut().output, "{}", &value)
+                writeln!(self.streams.borrow_mut().output, "{}", &value.borrow())
                     .map_err(|_| RuntimeError::PrintFailed)?;
             }
             Stmt::Var { name, initializer } => {
                 let ival = if let Some(init) = initializer {
                     self.evaluate(init)?
                 } else {
-                    Value::Nil
+                    Value::Nil.into()
                 };
 
                 self.environments.borrow().define(name.lexeme.into(), ival);
             }
             Stmt::While { condition, body } => {
-                while self.evaluate(condition)?.is_truthy() {
+                while self.evaluate(condition)?.borrow().is_truthy() {
                     let r = self.execute(body);
                     if let Err(RuntimeError::Break) = r {
                         break;
@@ -238,7 +288,7 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let v = if let Some(e) = value {
                     self.evaluate(e)?
                 } else {
-                    Value::Nil
+                    Value::Nil.into()
                 };
 
                 return Err(RuntimeError::Return { value: v });
@@ -251,21 +301,23 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
     pub fn evaluate(&'s self, expr: &'s Expr<'s>) -> EvaluationResult<'s> {
         Ok(match expr {
-            Expr::Literal { value: token } => Value::from(&token.typ),
+            Expr::Literal { value: token } => Value::from(&token.typ).into(),
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Unary { op, right } => {
                 let eval_right = self.evaluate(right)?;
 
                 match op.typ {
-                    TokenType::Minus => match eval_right {
-                        Value::Number(value) => Value::Number(-value),
+                    TokenType::Minus => match eval_right.borrow().deref() {
+                        Value::Number(value) => Value::Number(-value).into(),
                         _ => {
                             return Err(RuntimeError::Unimplemented {
                                 msg: "Cannot negate non-number".into(),
                             })
                         }
                     },
-                    TokenType::Bang => Value::Boolean(!eval_right.is_truthy()),
+                    TokenType::Bang => {
+                        Value::Boolean(!eval_right.borrow().deref().is_truthy()).into()
+                    }
                     _ => unreachable!("Unary operator not implemented: {:?}", op),
                 }
             }
@@ -273,26 +325,40 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 let eval_left = self.evaluate(left)?;
                 let eval_right = self.evaluate(right)?;
 
-                match (eval_left, op.typ, eval_right) {
-                    (Value::Number(l), TokenType::Plus, Value::Number(r)) => Value::Number(l + r),
-                    (Value::Number(l), TokenType::Minus, Value::Number(r)) => Value::Number(l - r),
-                    (Value::Number(l), TokenType::Star, Value::Number(r)) => Value::Number(l * r),
-                    (Value::Number(l), TokenType::Slash, Value::Number(r)) => Value::Number(l / r),
+                let x = match (
+                    eval_left.borrow().deref(),
+                    op.typ,
+                    eval_right.borrow().deref(),
+                ) {
+                    (Value::Number(l), TokenType::Plus, Value::Number(r)) => {
+                        Value::Number(l + r).into()
+                    }
+                    (Value::Number(l), TokenType::Minus, Value::Number(r)) => {
+                        Value::Number(l - r).into()
+                    }
+                    (Value::Number(l), TokenType::Star, Value::Number(r)) => {
+                        Value::Number(l * r).into()
+                    }
+                    (Value::Number(l), TokenType::Slash, Value::Number(r)) => {
+                        Value::Number(l / r).into()
+                    }
                     (Value::Number(l), TokenType::Greater, Value::Number(r)) => {
-                        Value::Boolean(l > r)
+                        Value::Boolean(l > r).into()
                     }
                     (Value::Number(l), TokenType::GreaterEqual, Value::Number(r)) => {
-                        Value::Boolean(l >= r)
+                        Value::Boolean(l >= r).into()
                     }
-                    (Value::Number(l), TokenType::Less, Value::Number(r)) => Value::Boolean(l < r),
+                    (Value::Number(l), TokenType::Less, Value::Number(r)) => {
+                        Value::Boolean(l < r).into()
+                    }
                     (Value::Number(l), TokenType::LessEqual, Value::Number(r)) => {
-                        Value::Boolean(l <= r)
+                        Value::Boolean(l <= r).into()
                     }
                     (Value::String(ref l), TokenType::Plus, Value::String(ref r)) => {
-                        Value::String(Cow::from(format!("{l}{r}")))
+                        Value::String(Cow::from(format!("{l}{r}"))).into()
                     }
-                    (l, TokenType::EqualEqual, r) => Value::Boolean(l == r),
-                    (l, TokenType::BangEqual, r) => Value::Boolean(l != r),
+                    (l, TokenType::EqualEqual, r) => Value::Boolean(l == r).into(),
+                    (l, TokenType::BangEqual, r) => Value::Boolean(l != r).into(),
                     // TODO: more specific errors!
                     (l, o, r) => {
                         return Err(RuntimeError::Unimplemented {
@@ -303,12 +369,13 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                             ),
                         })
                     }
-                }
+                };
+                x
             }
             Expr::Logical { left, op, right } => {
                 let l = self.evaluate(left)?;
 
-                return match (l.is_truthy(), op.typ) {
+                return match (l.clone().borrow().is_truthy(), op.typ) {
                     (true, TokenType::Or) => Ok(l),
                     (false, TokenType::Or) => self.evaluate(right),
                     (true, TokenType::And) => self.evaluate(right),
@@ -325,17 +392,34 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
                 self.evaluate(value)?,
                 self.locals.get(expr),
             )?,
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => {
+                let o = self.evaluate(object)?;
+
+                let x = if let Value::Instance { ref mut fields, .. } = o.borrow_mut().deref_mut() {
+                    let v = self.evaluate(value)?;
+                    fields.insert(Cow::from(name.lexeme), v.clone());
+                    v
+                } else {
+                    return Err(RuntimeError::OnlyInstancesHaveAttributes);
+                };
+                x
+            }
             Expr::Call { callee, args } => {
                 let c = self.evaluate(callee)?;
 
                 let a = args
                     .iter()
                     .map(|arg| self.evaluate(arg))
-                    .collect::<Result<Vec<Value>, RuntimeError>>()?;
+                    .collect::<Result<Vec<LoxPointer>, RuntimeError>>()?;
 
                 let num_args = a.len();
 
-                let r = match c {
+                let r = match c.borrow().deref().clone() {
+                    // TODO: clone here is weird
                     Value::NativeFunction { name: _, f, arity } => {
                         if num_args != arity {
                             return Err(RuntimeError::WrongNumberOfArgs {
@@ -376,19 +460,110 @@ impl<'s, 'io: 's, I: Read, O: Write, E: Write> Interpreter<'s, 'io, I, O, E> {
 
                         self.environments.replace(old_env);
 
-                        rv.map(|_| Value::Nil)
+                        rv.map(|_| Value::Nil.into())
+                    }
+                    ref class @ Value::Class { ref methods, .. } => {
+                        let instance: LoxPointer = Value::Instance {
+                            class: Box::new(class.clone().into()), // TODO: this seems wrong, should be able to use original Rc
+                            fields: methods.clone(),
+                        }
+                        .into();
+
+                        if let Some(init) = methods.get("init") {
+                            if let Value::Function {
+                                name: _,
+                                params,
+                                body,
+                                closure,
+                            } = init.borrow().deref()
+                            {
+                                let num_params = params.len();
+                                if num_args != num_params {
+                                    return Err(RuntimeError::WrongNumberOfArgs {
+                                        arity: num_params,
+                                        got: num_args,
+                                    });
+                                };
+
+                                let old_env = self.environments.replace(closure.clone());
+
+                                self.environments.borrow_mut().push(); // this is the "class" environment that holds `this`
+
+                                self.environments
+                                    .borrow()
+                                    .define(Cow::from("this"), instance.clone());
+
+                                self.environments.borrow_mut().push(); // this is the environment for the function call
+
+                                a.iter().zip(params.iter()).for_each(|(arg, &param)| {
+                                    self.environments
+                                        .borrow()
+                                        .define(Cow::from(param), arg.clone()) // TODO another clone
+                                });
+
+                                self.interpret(body)?;
+
+                                self.environments.borrow_mut().pop();
+                                self.environments.borrow_mut().pop();
+
+                                self.environments.replace(old_env);
+                            }
+                        }
+
+                        Ok(instance)
                     }
                     _ => Err(RuntimeError::NotCallable {
-                        typ: c.as_ref().to_string(),
+                        typ: c.borrow().to_string(),
                     }),
                 };
 
                 match r {
                     Ok(v) => v,
                     Err(RuntimeError::Return { value }) => value,
-                    err => return err,
+                    Err(e) => return Err(e),
                 }
             }
+            Expr::Get { object, name } => {
+                let o = self.evaluate(object)?;
+                let x = if let Value::Instance {
+                    fields: attributes, ..
+                } = o.borrow().deref()
+                {
+                    attributes
+                        .get(&Cow::from(name.lexeme))
+                        .cloned()
+                        .ok_or_else(|| RuntimeError::UndefinedVariable {
+                            name: name.lexeme.to_string(),
+                        })?
+                } else {
+                    return Err(RuntimeError::OnlyInstancesHaveAttributes);
+                };
+                if let Value::Function {
+                    name,
+                    params,
+                    body,
+                    closure,
+                } = x.borrow().deref()
+                {
+                    let mut closure_with_this = closure.clone();
+                    closure_with_this.push();
+                    if let Some(e) = closure_with_this.0.last_mut() {
+                        e.borrow_mut().define(Cow::from("this"), o.clone());
+                    }
+                    return Ok(Value::Function {
+                        name,
+                        params: params.clone(),
+                        body,
+                        closure: closure_with_this,
+                    }
+                    .into());
+                }
+                x
+            }
+            Expr::This { keyword } => self
+                .environments
+                .borrow()
+                .get(&Cow::from(keyword.lexeme), self.locals.get(expr))?,
         })
     }
 }

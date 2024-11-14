@@ -22,6 +22,12 @@ pub type Locals<'s> = HashMap<&'s Expr<'s>, usize>;
 #[derive(Debug, PartialEq)]
 enum FunctionType {
     Function,
+    Method,
+}
+
+#[derive(Debug, PartialEq)]
+enum ClassType {
+    Class,
 }
 
 impl ScopeStack<'_> {
@@ -38,6 +44,7 @@ struct Resolver<'s> {
     scopes: RefCell<ScopeStack<'s>>,
     locals: RefCell<Locals<'s>>,
     current_function_type: RefCell<Option<FunctionType>>,
+    current_class_type: RefCell<Option<ClassType>>,
 }
 
 impl<'s> Resolver<'s> {
@@ -113,6 +120,34 @@ impl<'s> Resolver<'s> {
                 self.resolve_expression(condition)?;
                 self.resolve_statement(body)?;
             }
+            Stmt::Class { name, methods } => {
+                let enclosing_class_type = self.current_class_type.replace(Some(ClassType::Class));
+
+                self.declare(name)?;
+                self.define(name);
+
+                self.scopes.borrow_mut().push();
+
+                self.scopes
+                    .borrow_mut()
+                    .0
+                    .last_mut()
+                    .map(|s| s.borrow_mut().insert("this", true));
+
+                for method in methods {
+                    let enclosing_function_type = self
+                        .current_function_type
+                        .replace(Some(FunctionType::Method));
+
+                    self.resolve_statement(method)?;
+
+                    self.current_function_type.replace(enclosing_function_type);
+                }
+
+                self.scopes.borrow_mut().pop();
+
+                self.current_class_type.replace(enclosing_class_type);
+            }
         }
 
         Ok(())
@@ -160,6 +195,22 @@ impl<'s> Resolver<'s> {
                 }
 
                 self.resolve_local(expr, name);
+            }
+            Expr::Get { object, .. } => {
+                self.resolve_expression(object)?;
+            }
+            Expr::Set { object, value, .. } => {
+                self.resolve_expression(object)?;
+                self.resolve_expression(value)?;
+            }
+            Expr::This { keyword } => {
+                if self.current_class_type.borrow().is_none() {
+                    return Err(ResolutionError::Error {
+                        msg: "Cannot use 'this' outside a class".into(),
+                    });
+                }
+
+                self.resolve_local(expr, keyword);
             }
         }
 

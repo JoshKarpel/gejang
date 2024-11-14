@@ -18,6 +18,8 @@ pub enum ParserError<'s> {
     UnexpectedEndOfInput,
     #[error("Invalid assignment target")] // better debug info
     InvalidAssignmentTarget,
+    #[error("{msg}")]
+    Error { msg: String },
 }
 
 type ParserExprResult<'s> = Result<Expr<'s>, ParserError<'s>>;
@@ -171,6 +173,7 @@ where
                     | TokenType::Fun
                     | TokenType::Return
                     | TokenType::Break
+                    | TokenType::Class
             )
         }) {
             match token.typ {
@@ -185,6 +188,7 @@ where
                     self.require_token(TokenType::Semicolon)?;
                     Ok(Stmt::Break)
                 }
+                TokenType::Class => self.class_declaration(),
                 _ => unreachable!("Unimplemented statement type"),
             }
         } else {
@@ -389,6 +393,39 @@ where
         Ok(Stmt::Return { value })
     }
 
+    fn class_declaration(&mut self) -> ParserStmtResult<'s> {
+        if let Some(name) = self
+            .tokens
+            .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+        {
+            self.require_token(TokenType::LeftBrace)?;
+
+            let mut methods = Vec::new();
+
+            while self
+                .tokens
+                .peek()
+                .is_some_and(|t| !matches!(t.typ, TokenType::RightBrace))
+            {
+                methods.push(self.function()?)
+            }
+
+            self.require_token(TokenType::RightBrace)?;
+
+            Ok(Stmt::Class { name, methods })
+        } else {
+            Err(self
+                .tokens
+                .peek()
+                .map_or(ParserError::UnexpectedEndOfInput, |token| {
+                    ParserError::UnexpectedToken {
+                        expected: TokenType::Identifier(""),
+                        token,
+                    }
+                }))
+        }
+    }
+
     fn expression_statement(&mut self) -> ParserStmtResult<'s> {
         let expr = self.expression()?;
         self.require_token(TokenType::Semicolon)?;
@@ -426,6 +463,12 @@ where
 
             if let Expr::Variable { name } = expr {
                 Ok(Expr::Assign { name, value })
+            } else if let Expr::Get { object, name } = expr {
+                Ok(Expr::Set {
+                    object,
+                    name,
+                    value,
+                })
             } else {
                 Err(ParserError::InvalidAssignmentTarget)
             }
@@ -559,35 +602,57 @@ where
     fn call(&mut self) -> ParserExprResult<'s> {
         let mut expr = self.primary()?;
 
-        while self
-            .tokens
-            .next_if(|t| matches!(t.typ, TokenType::LeftParen))
-            .is_some()
-        {
-            let mut args = vec![];
-
-            while self
+        loop {
+            if self
                 .tokens
-                .peek()
-                .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
+                .next_if(|t| matches!(t.typ, TokenType::LeftParen))
+                .is_some()
             {
-                args.push(self.expression()?);
-                if !self
+                let mut args = vec![];
+
+                while self
                     .tokens
                     .peek()
-                    .is_some_and(|t| matches!(t.typ, TokenType::Comma))
+                    .is_some_and(|t| !matches!(t.typ, TokenType::RightParen))
                 {
-                    break;
+                    args.push(self.expression()?);
+                    if !self
+                        .tokens
+                        .peek()
+                        .is_some_and(|t| matches!(t.typ, TokenType::Comma))
+                    {
+                        break;
+                    }
                 }
+
+                self.require_token(TokenType::RightParen)?;
+
+                expr = Expr::Call {
+                    callee: Box::new(expr),
+                    // paren,  // trouble with multiple mutable borrows here
+                    args,
+                };
+            } else if self
+                .tokens
+                .next_if(|t| matches!(t.typ, TokenType::Dot))
+                .is_some()
+            {
+                if let Some(name) = self
+                    .tokens
+                    .next_if(|t| matches!(t.typ, TokenType::Identifier(_)))
+                {
+                    expr = Expr::Get {
+                        object: Box::new(expr),
+                        name,
+                    }
+                } else {
+                    return Err(ParserError::Error {
+                        msg: "Expected identifier after .".into(),
+                    });
+                }
+            } else {
+                break;
             }
-
-            self.require_token(TokenType::RightParen)?;
-
-            expr = Expr::Call {
-                callee: Box::new(expr),
-                // paren,  // trouble with multiple mutable borrows here
-                args,
-            };
         }
 
         Ok(expr)
@@ -619,6 +684,7 @@ where
                         expr: Box::new(expr),
                     }
                 }
+                TokenType::This => Expr::This { keyword: token },
                 TokenType::Identifier(_) => Expr::Variable { name: token },
                 _ => {
                     return Err(ParserError::UnexpectedToken {

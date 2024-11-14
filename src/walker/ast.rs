@@ -24,6 +24,10 @@ pub enum Expr<'s> {
         // paren: RefToken<'s>,
         args: Vec<Expr<'s>>,
     },
+    Get {
+        object: BoxedExpr<'s>,
+        name: RefToken<'s>,
+    },
     Unary {
         op: RefToken<'s>,
         right: BoxedExpr<'s>,
@@ -38,6 +42,14 @@ pub enum Expr<'s> {
         left: BoxedExpr<'s>,
         op: RefToken<'s>,
         right: BoxedExpr<'s>,
+    },
+    Set {
+        object: BoxedExpr<'s>,
+        name: RefToken<'s>,
+        value: BoxedExpr<'s>,
+    },
+    This {
+        keyword: RefToken<'s>,
     },
     Variable {
         name: RefToken<'s>,
@@ -67,6 +79,9 @@ impl Display for Expr<'_> {
                         args.iter().map(|a| a.to_string()).join(", ")
                     )
                 }
+                Expr::Get { object, name } => {
+                    format!("(get {} {})", object, name.lexeme)
+                }
                 Expr::Unary { op, right } => {
                     format!("({} {})", op.lexeme, right)
                 }
@@ -78,6 +93,16 @@ impl Display for Expr<'_> {
                     format!("({} {} {}", op.lexeme, left, right)
                 }
                 Expr::Variable { name } => name.lexeme.into(),
+                Expr::Set {
+                    object,
+                    name,
+                    value,
+                } => {
+                    format!("(set {} {} {})", object, name.lexeme, value)
+                }
+                Expr::This { .. } => {
+                    "this".to_string()
+                }
             }
         )
     }
@@ -89,6 +114,10 @@ pub enum Stmt<'s> {
         stmts: Vec<Stmt<'s>>,
     },
     Break,
+    Class {
+        name: RefToken<'s>,
+        methods: Vec<Stmt<'s>>,
+    },
     Expression {
         expr: BoxedExpr<'s>,
     },
@@ -136,6 +165,23 @@ impl Display for Stmt<'_> {
                         name.lexeme,
                         params.iter().map(|p| p.lexeme).join(" "),
                         body.iter().map(|s| s.to_string()).join(" ")
+                    )
+                }
+                Stmt::Class { name, methods } => {
+                    format!(
+                        "(class {} {})",
+                        name.lexeme,
+                        methods
+                            .iter()
+                            .map(|m| format!(
+                                "({})",
+                                if let Stmt::Function { name, .. } = m {
+                                    name.lexeme
+                                } else {
+                                    ""
+                                }
+                            ))
+                            .join(" "),
                     )
                 }
                 Stmt::If {

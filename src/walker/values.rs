@@ -8,14 +8,16 @@ use strum_macros::{AsRefStr, IntoStaticStr};
 
 use crate::{
     shared::scanner::TokenType,
-    walker::{ast::Stmt, interpreter::EnvironmentStack},
+    walker::{
+        ast::Stmt,
+        interpreter::{EnvironmentStack, LoxPointer},
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, AsRefStr, IntoStaticStr)]
 pub enum Value<'s> {
     // Is it really worth bringing those strings all the way from the source to here?
     #[allow(dead_code)]
-    Object(HashMap<Cow<'s, str>, Value<'s>>),
     Number(f64),
     String(Cow<'s, str>),
     Boolean(bool),
@@ -23,13 +25,21 @@ pub enum Value<'s> {
     NativeFunction {
         name: &'static str,
         arity: usize,
-        f: fn(&[Value<'s>]) -> Value<'s>,
+        f: fn(&[LoxPointer<'s>]) -> LoxPointer<'s>,
     },
     Function {
         name: &'s str,
         params: Vec<&'s str>,
         body: &'s Vec<Stmt<'s>>,
         closure: EnvironmentStack<'s>,
+    },
+    Class {
+        name: &'s str,
+        methods: HashMap<Cow<'s, str>, LoxPointer<'s>>,
+    },
+    Instance {
+        class: Box<LoxPointer<'s>>,
+        fields: HashMap<Cow<'s, str>, LoxPointer<'s>>,
     },
 }
 
@@ -63,13 +73,14 @@ impl Display for Value<'_> {
             f,
             "{}",
             match self {
-                Value::Object(_) => "<object>".to_string(), // TODO: implement better object display
                 Value::Number(value) => value.to_string(),
                 Value::String(value) => value.to_string(),
                 Value::Boolean(value) => value.to_string(),
                 Value::Nil => "nil".to_string(),
                 Value::NativeFunction { name, arity, .. } => format!("<native fun {name}/{arity}>"),
                 Value::Function { name, params, .. } => format!("<fun {}/{}>", name, params.len()),
+                Value::Class { name, .. } => format!("<cls {}>", name),
+                Value::Instance { class, .. } => format!("<instance of {}>", class.borrow()), // TODO: implement better object display
             }
         )
     }
